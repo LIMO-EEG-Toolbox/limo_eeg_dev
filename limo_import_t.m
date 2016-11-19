@@ -76,13 +76,16 @@ uiwait(handles.figure1);
 
 % --- Outputs from this function are returned to the command line.
 function varargout = limo_import_t_OutputFcn(hObject, eventdata, handles) 
-if isempty(handles.out)
-    varargout{1} = 'LIMO import terminated';
+if isempty(handles)
+    return; close
 else
-    varargout{1} = handles.out;
+    if isempty(handles.out)
+        varargout{1} = 'LIMO import terminated';
+    else
+        varargout{1} = handles.out;
+    end
+    delete(handles.figure1)
 end
-delete(handles.figure1)
-
 
 %% Callbacks
 
@@ -259,7 +262,7 @@ guidata(hObject, handles);
 function boostrap_check_box_Callback(hObject, eventdata, handles)
 M = get(hObject,'Value');
 if M == 1
-    handles.bootstrap = 1;
+    handles.bootstrap = 800; % our simulations show that under 800 this is not stable
     disp('bootstrap is on');
     set(handles.TFCE,'Enable','on')
 elseif M == 0
