@@ -1,7 +1,6 @@
 function model = limo_mglm(varargin)
 
-% your version
-Multivariate General Linear Model for EEG data
+% Multivariate General Linear Model for EEG data
 % The model consider subjects / trials as independent observations
 % i.e. this is similar as running a N-way MANOVA or MANCOVA
 % Analyses are performed at one time frame only, but for all
@@ -180,7 +179,7 @@ if nb_factors == 1   %  1-way MANOVA
     Sxx = S(size(Y,2)+1:size(S,1),size(Y,2)+1:size(S,2));
     Rsquare_multi = trace(Sxy*Syx) / sqrt(trace(Sxx.^2)*trace(Syy.^2)); % Robert and Escoufier, J.Royal Stat Soc, C - 1976
     
-    Eigen_values_R2 = limo_decomp(E,H); 
+    [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H); 
     p = size(Y,2); % = number of variables (dimension)
     q = rank(X); % = number of regressors (df)
     s = min(p,q); % df
@@ -203,6 +202,7 @@ if nb_factors == 1   %  1-way MANOVA
     % -----------------------------------
     if nb_conditions ~= 0 && nb_continuous == 0
         Eigen_values_cond = Eigen_values_R2;
+        Eigen_vectors_cond = Eigen_vectors_R2;
 
     elseif nb_conditions ~= 0 && nb_continuous ~= 0
         C = eye(size(X,2));
@@ -212,7 +212,7 @@ if nb_factors == 1   %  1-way MANOVA
         R0 = eye(size(Y,1)) - (X0*pinv(X0));
         M  = R0 - R;
         H  = (Betas'*X'*M*X*Betas);
-        [Eigen_vectors_cond,Eigen_values_cond] = limo_decomp(E,H);
+        [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
     end
     
     model.conditions.EV = [Eigen_values_cond'];
@@ -313,7 +313,7 @@ elseif nb_factors > 1  && isempty(nb_interactions) % N-ways MANOVA without inter
     R0   = eye(size(Y,1)) - (X0*pinv(X0));
     M    = R0 - R;      % M is the projection matrix onto Xc
     H    = (Betas'*X'*M*X*Betas);   % SSCP Hypothesis (Effect)
-    Eigen_values_R2 = limo_decomp(E,H);
+    [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H);
     
     % Generalized R2
     % variance covariance matrix
@@ -359,7 +359,7 @@ elseif nb_factors > 1  && isempty(nb_interactions) % N-ways MANOVA without inter
         R0   = eye(size(Y,1)) - (X0*pinv(X0));
         M    = R0 - R;
         H    = (Betas'*X'*M*X*Betas);
-        Eigen_values_cond = limo_decomp(E,H);
+        [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
         model.conditions.EV(f,:) = Eigen_values_cond';
         
         vh = nb_conditions(f) - 1; % df = q above
@@ -452,7 +452,7 @@ elseif nb_factors > 1  && ~isempty(nb_interactions) % N-ways MANOVA with interac
     R0   = eye(size(Y,1)) - (X0*pinv(X0));
     M    = R0 - R;      % M is the projection matrix onto Xc
     H    = (Betas'*X'*M*X*Betas);   % SSCP Hypothesis (Effect)
-    Eigen_values_cond = limo_decomp(E,H);
+    [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
     
     % Generalized R2
     % variance covariance matrix
@@ -463,7 +463,7 @@ elseif nb_factors > 1  && ~isempty(nb_interactions) % N-ways MANOVA with interac
     Sxx = S(size(Y,2)+1:size(S,1),size(Y,2)+1:size(S,2));
     Rsquare_multi = trace(Sxy*Syx) / sqrt(trace(Sxx.^2)*trace(Syy.^2)); % Robert and Escoufier, J.Royal Stat Soc, C - 1976
     
-    Eigen_values_R2 = limo_decomp(E,H);
+    [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H);
     p = size(Y,2); % = number of variables (dimension)
     q = rank(X); % = number of regressors (df)
     s = min(p,q); % df
@@ -518,7 +518,7 @@ elseif nb_factors > 1  && ~isempty(nb_interactions) % N-ways MANOVA with interac
         R0   = eye(size(Y,1)) - (X0*pinv(X0));
         M    = R0 - R;
         H(f,:) = diag((betas'*x'*M*x*betas));
-        Eigen_values_cond = limo_decomp(E,H);
+        [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
         model.conditions.EV(f,:) = Eigen_values_cond';
         
         vh = nb_conditions(f) - 1; % df = q above
@@ -585,7 +585,7 @@ elseif nb_factors > 1  && ~isempty(nb_interactions) % N-ways MANOVA with interac
     
     if nb_factors == 2 && nb_continuous == 0 % the quick way with only one interaction
         HI = diag(T)' - H(1,:) - H(2,:) - diag(E)';
-        Eigen_values_inter = limo_decomp(E,HI);
+        [Eigen_vectors_inter, Eigen_values_inter] = limo_decomp(E,HI);
         model.interactions.EV = [Eigen_values_inter'];
         
         vh = nb_interactions - 1; % df = q above
@@ -702,7 +702,7 @@ elseif nb_factors > 1  && ~isempty(nb_interactions) % N-ways MANOVA with interac
             R0   = eye(size(Y,1)) - (X0*pinv(X0));
             M    = R0 - R;
             HI(f,:) = diag((betas'*x'*M*x*betas))';
-            Eigen_values_inter = limo_decomp(E,HI(f,:));
+            [Eigen_vectors_inter, Eigen_values_inter] = limo_decomp(E,HI(f,:));
             model.interactions.EV(f,:) = Eigen_values_inter';
             
             vh = nb_interactions(f) - 1; % df = q above
@@ -790,7 +790,7 @@ if nb_continuous ~=0
         R0 = eye(size(Y,1)) - (X0*pinv(X0));
         M  = R0 - R;
         H  = (Betas'*X'*M*X*Betas);
-        Eigen_values_R2 = limo_decomp(E,H);
+        [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H);
         
         % Generalized R2
         % variance covariance matrix
@@ -801,7 +801,7 @@ if nb_continuous ~=0
         Sxx = S(size(Y,2)+1:size(S,1),size(Y,2)+1:size(S,2));
         Rsquare_multi = trace(Sxy*Syx) / sqrt(trace(Sxx.^2)*trace(Syy.^2)); % Robert and Escoufier, J.Royal Stat Soc, C - 1976
         
-        Eigen_values_R2 = limo_decomp(E,H);
+        [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H);
         p = size(Y,2); % = number of variables (dimension)
         q = rank(X); % = number of regressors (df)
         s = min(p,q); % df
@@ -833,7 +833,7 @@ if nb_continuous ~=0
             R0   = eye(size(Y,1)) - (X0*pinv(X0));
             M    = R0 - R;
             H    = Betas'*X'*M*X*Betas;
-            Eigen_values_continuous = limo_decomp(E,H);
+            [Eigen_vectors_continuous, Eigen_values_continuous] = limo_decomp(E,H);
             model.continuous.EV = [model.continuous.EV Eigen_values_continuous'];
             
             df_continuous = size(Y,2);
