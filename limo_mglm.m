@@ -1,6 +1,7 @@
 function model = limo_mglm(varargin)
 
-% Multivariate General Linear Model for EEG data
+% your version
+Multivariate General Linear Model for EEG data
 % The model consider subjects / trials as independent observations
 % i.e. this is similar as running a N-way MANOVA or MANCOVA
 % Analyses are performed at one time frame only, but for all
