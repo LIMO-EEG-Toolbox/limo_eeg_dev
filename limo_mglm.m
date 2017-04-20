@@ -168,7 +168,8 @@ if nb_factors == 1   %  1-way MANOVA
     X0 = X*C0;  % Reduced model
     R0 = eye(size(Y,1)) - (X0*pinv(X0));
     M  = R0 - R;  % Projection matrix onto Xc
-    H  = (Betas'*X'*M*X*Betas);  % SS Effect
+    % H  = (Betas'*X'*M*X*Betas);  % SS Effect
+    H = T - E;
     
     % Generalized R2
     % variance covariance matrix
@@ -242,7 +243,7 @@ if nb_factors == 1   %  1-way MANOVA
         % Roy's test
         theta = max(Eigen_values_cond) / (1+max(Eigen_values_cond));
         df_conditions_Roy = max(p,vh);
-        dfe_conditions_Roy = ve - 1; % in Renchner it is proposed to use ve - max(p,vh) -1 while in Statistica it is ve -1
+        dfe_conditions_Roy = ve - 1; % in Renchner it is proposed to use ve - max(p,vh) -1 while in Statistica it is ve -1. In R and SAS they use ve
         F_conditions_Roy = (dfe_conditions_Roy*max(Eigen_values_cond))/df_conditions_Roy;
         pval_conditions_Roy = 1-fcdf(F_conditions_Roy, df_conditions_Roy, dfe_conditions_Roy);
         
