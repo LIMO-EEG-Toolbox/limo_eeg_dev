@@ -168,8 +168,11 @@ if nb_factors == 1   %  1-way MANOVA
     X0 = X*C0;  % Reduced model
     R0 = eye(size(Y,1)) - (X0*pinv(X0));
     M  = R0 - R;  % Projection matrix onto Xc
-    % H  = (Betas'*X'*M*X*Betas);  % SS Effect
-    H = T - E;
+    H = (Betas'*X'*M*X*Betas);  % SS Effect % only works
+    % with rank deficient matrix (intercept column with ones as last column of X)
+    if H ~= T - E % if H is not equal to T - E problem!
+        H = T - E;
+    end 
     
     % Generalized R2
     % variance covariance matrix
@@ -270,11 +273,11 @@ if nb_factors == 1   %  1-way MANOVA
     if length(Y)-nb_conditions <= nb_conditions
         errordlg('there is not enough data point to run a discriminant analysis')
     else
-        % need to re-scale eigenvectors so the within-group variance is 1
+        % rescale eigenvectors so the within-group variance is 1
         n = size(Y,1); % nb of observations (dfe)
-        g = rank(X); % number of regressors (df)
+        q = rank(X); % number of groups (df)
         a = Eigen_vectors_cond;
-        vs = diag((a' * E * a))' ./ (n-g);
+        vs = diag((a' * E * a))' ./ (n-q);
         vs(vs<=0) = 1;
         a = a ./ repmat(sqrt(vs), size(a,1), 1);
         scaled_eigenvectors = a;
