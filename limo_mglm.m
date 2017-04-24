@@ -138,7 +138,7 @@ end
 
 % -------------------------
 if nb_factors == 1   %  1-way MANOVA
-    % -------------------------
+% -------------------------
     
     % total sum of squares, projection matrix for errors, residuals and betas
     % -----------------------------------------------------------------------
@@ -264,24 +264,35 @@ if nb_factors == 1   %  1-way MANOVA
         pval_conditions_Roy = pval_conditions_Pillai;
     end
     
+    %% 
     % compute the discriminant function
     % ---------------------------------
     if length(Y)-nb_conditions <= nb_conditions
         errordlg('there is not enough data point to run a discriminant analysis')
     else
-        a = inv(chol(E))*Eigen_vectors_cond; % need to adjust eigen vectors
+        % need to re-scale eigenvectors so the within-group variance is 1
+        n = size(Y,1); % nb of observations (dfe)
+        g = rank(X); % number of regressors (df)
+        a = Eigen_vectors_cond;
+        vs = diag((a' * E * a))' ./ (n-g);
+        vs(vs<=0) = 1;
+        a = a ./ repmat(sqrt(vs), size(a,1), 1);
+        scaled_eigenvectors = a;
+        % validate if correct eigenvector
+        if round((inv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
+            errordlg('something went wrong with scaling the eigenvectors')
+        
         weights = Eigen_values_cond ./ sum(Eigen_values_cond);
         
         % get the function(s)
-        for d=1:size(a,2)
-              z(:,d) = a(:,d)'*Y;
+        for d=1:size(scaled_eigenvectors,2)
+              z(:,d) = scaled_eigenvectors(:,d)'*Y;
         end
                
         % do the classification
-        
+        end      
     end 
-    
-    
+    %% 
     % ------------------------------------------------
 elseif nb_factors > 1  && isempty(nb_interactions) % N-ways MANOVA without interactions
     % ------------------------------------------------
