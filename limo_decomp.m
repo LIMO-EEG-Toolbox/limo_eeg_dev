@@ -19,21 +19,21 @@ function [eigen_vectors,eigen_values] = limo_decomp(E,H)
 
 try
     U = chol(E);
-    [b D] = eig(inv(U')*H*inv(U)); % b: eigenvectors, D: diagonal matrix with eigenvalues
+    [b D] = eig(inv(U)'*H*inv(U)); % b: eigenvectors, D: diagonal matrix with eigenvalues
     
     % validate if correct eigenvalues and eigenvectors of matrix inv(U')*H*inv(U):
     if round((inv(U')*H*inv(U)) * b, 4) ~= round(b * D, 4) % needs to be equal 
         errordlg('something went wrong in the decomposition inv(U`)*H*inv(U)');
     else
         % adjustment to find eigenvectors of matrix inv(E)*H (page 279 Rencher) 
-        a = inv(U)*b % these are the eigenvectors of inv(E)*H
+        a = inv(U)*b; % these are the eigenvectors of inv(E)*H
         
         % sort eigenvectors 
-        [e,ei] = sort(diag(D))
-        a = a(:,flipud(ei)); % in order of increasing e
+        [e,ei] = sort(diag(D));
+        a = a(:,flipud(ei)); % in order of increasing eigenvalues
         
         % validate if correct eigenvalues and eigenvectors of matrix inv(E)*H:
-        if round((inv(E)*H) * a, 4) == round(a * D, 4) % needs to be one (equal)
+        if round((inv(E)*H) * a, 4) == round(a * diag(flipud(e)), 4) % needs to be one (equal)
             % check if A * v = Eigenvalue * V
             % round((inv(E)*H) * a(:,1), 4) == round(eigen_values(1) * a(:,1), 4)
             eigen_vectors = a;
