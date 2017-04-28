@@ -170,7 +170,7 @@ if nb_factors == 1   %  1-way MANOVA
     M  = R0 - R;  % Projection matrix onto Xc
     H = (Betas'*X'*M*X*Betas);  % SS Effect % only works
     % with rank deficient matrix (intercept column with ones as last column of X)
-    if H ~= T - E % if H is not equal to T - E problem!
+    if round(H,6) ~= round(T - E, 6) % if H is not equal to T - E problem!
         H = T - E;
     end 
     
