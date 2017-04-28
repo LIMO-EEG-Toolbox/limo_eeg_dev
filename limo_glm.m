@@ -138,6 +138,7 @@ if strcmp(method,'OLS')
     
 elseif strcmp(method,'WLS')
     [Betas,W] = limo_WLS(X,Y);
+    P = X*(X'*W*X)*X'W;
     Y = Y .* repmat(W,1,size(Y,2));
     X = [X(:,1:end-1).*repmat(W,1,size(X,2)-1) X(:,end)];
     
@@ -167,42 +168,67 @@ elseif strcmp(method,'WLS-TF')
         index1=index1+1; 
     end
     clear reshaped
+    P = X*(X'*W*X)*X'W;
     Y = Y .* repmat(W,1,size(Y,2));
     X = X .* repmat(W,1,size(X,2));
     
 elseif strcmp(method,'IRLS')
     [Betas,W] = limo_IRLS(X,Y);
     Y = Y .* W;
-    X = X .* W;
-
+    for t=1:size(Y,2)
+        P{t} = X*(X'*W*X)*X'W(:,t);
+        XX{t} = [X(:,1:end-1).*W(:,t) X(:,end)];
+    end
+    X = XX; clear XX
 end
 
 % total sum of squares, projection matrix for errors, residuals 
 % --------------------------------------------------------------
 T     = (Y-repmat(mean(Y),size(Y,1),1))'*(Y-repmat(mean(Y),size(Y,1),1));  % SS Total
-R     = eye(size(Y,1)) - (X*pinv(X));                                      % Projection on E
-E     = (Y'*R*Y);                                                          % SS Error
+if strcmp(method,'IRLS')
+    Rsquare = NaN(1,size(Y,2)); F_Rsquare = Rsquare; p_Rsquare = Rsquare;
+    df = Rsquare; dfe = Rsquare; % place holders
+    for t=1:size(Y,2)
+        R{t} = eye(size(Y(:,t),1)) - (X{t}*pinv(X{t}));
+        E{t} = (Y(:,t)'*{t}R*Y(:,t));
+        df(t)  = trace(P{t}'*P{t})^2/trace(P{t}'*P{t}*P{t}'*P{t})-1; % Satterthwaite approximation
+        dfe(t) = trace((eye(size(P{t}))-P{t})'*(eye(size(P{t}))-P{t}));
 
-% the number of degrees of freedom can be defined as the minimum number of 
-% independent coordinates that can specify the position of the system completely.
-HM = X*pinv(X'*X)*X'; % Hat matrix; 
-% df = trace(HM)-1; % sum of Leverages, here we use instead
-df = trace(HM'*HM)^2/trace(HM'*HM*HM'*HM)-1; % Satterthwaite approximation
-dfe = trace((eye(size(HM))-HM)'*(eye(size(HM))-HM)); 
-% gives the same as [rank(X)-1 (size(Y,1)-rank(X))] if OLS 
-
-% compute model R^2
-% -----------------
-C = eye(size(X,2));
-C(:,size(X,2)) = 0;
-C0 = eye(size(X,2)) - C*pinv(C);
-X0 = X*C0;  % Reduced model
-R0 = eye(size(Y,1)) - (X0*pinv(X0));
-M  = R0 - R;  % Projection matrix onto Xc
-H  = (Betas'*X'*M*X*Betas);  % SS Effect
-Rsquare   = diag(H)./diag(T); % Variances explained
-F_Rsquare = (diag(H)./df) ./ (diag(E)/dfe);
-p_Rsquare = 1 - fcdf(F_Rsquare, df, dfe);
+        % compute model R^2
+        % -----------------
+        C = eye(size(X{t},2));
+        C(:,size(X{t},2)) = 0;
+        C0 = eye(size(X{t},2)) - C*pinv(C);
+        X0 = X{t}*C0;  % Reduced model
+        R0 = eye(size(Y,1)) - (X0*pinv(X0));
+        M  = R0 - R;  % Projection matrix onto Xc
+        H  = (Betas'*X{t}'*M*X{t}*Betas);  % SS Effect
+        Rsquare(t)   = H./T(t); % Variances explained
+        F_Rsquare(t) = (H./df(t)) ./ (E(t)/dfe(t));
+        p_Rsquare(t) = 1 - fcdf(F_Rsquare, df(t), dfe(t));
+    end
+else
+    R     = eye(size(Y,1)) - (X*pinv(X));    % Projection on E
+    E     = (Y'*R*Y);                        % SS Error
+    % the number of degrees of freedom can be defined as the minimum number of
+    % independent coordinates that can specify the position of the system completely.
+    df = trace(P'*P)^2/trace(P'*P*P'*P)-1; % Satterthwaite approximation
+    dfe = trace((eye(size(P))-P)'*(eye(size(P))-P));
+    % gives the same as [rank(X)-1 (size(Y,1)-rank(X))] if OLS
+    
+    % compute model R^2
+    % -----------------
+    C = eye(size(X,2));
+    C(:,size(X,2)) = 0;
+    C0 = eye(size(X,2)) - C*pinv(C);
+    X0 = X*C0;  % Reduced model
+    R0 = eye(size(Y,1)) - (X0*pinv(X0));
+    M  = R0 - R;  % Projection matrix onto Xc
+    H  = (Betas'*X'*M*X*Betas);  % SS Effect
+    Rsquare   = diag(H)./diag(T); % Variances explained
+    F_Rsquare = (diag(H)./df) ./ (diag(E)/dfe);
+    p_Rsquare = 1 - fcdf(F_Rsquare, df, dfe);
+end
 
 % ----------------------------
 %% update the model structure
