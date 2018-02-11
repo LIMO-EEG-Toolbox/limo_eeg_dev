@@ -4,18 +4,18 @@ function [eigen_vectors,eigen_values] = limo_decomp(E,H,type)
 %
 % INPUT E and H are matrices, typically square symmetric Sum of Squares and
 %       Cross Products
-%       type is 'Chol' (default) or 'SVD')
+%       type is 'Chol' (default) or 'SVD'
 %
 % OUTPUT: the eigen vectors and values of the decomposition of inv(E)*H
 %
 % Following Rencher 2002 (Methods of multivariate analysis - Wiley) we note
-% that eig(inv(E)*H) = % eig((E^1/2)*H*inv(E^1/2)) = eig(inv(U')*H*inv(U))
+% that eig(inv(E)*H) = eig((E^1/2)*H*inv(E^1/2)) = eig(inv(U')*H*inv(U))
 % and E^1/2 is the square root matrix of E and U'U = E (Cholesky factorization).
 % Using the Cholesky factorisation, we return positve eigen values from
 % inv(U')*H*inv(U) which is positive semidefinite. If this procedure fails
 % (E is not positive definite) we then use an eigen value decomposition of pinv(E)*H
 % It is also possible to procede using an SVD decomposition using the argument
-% type ('SVD')
+% type ('SVD').
 %
 % Cyril Pernet 2009
 % Cyril Pernet and Iege Bassez 2017
@@ -29,21 +29,22 @@ elseif nargin == 2
     type = 'Chol';
 end
 
-% proceede
+% procede
 if strcmpi(type,'chol')
     U = chol(E);
     [vec, D] = eig(inv(U')*H*inv(U)); % vec: eigenvectors, D: diagonal matrix with eigenvalues of inv(U')*H*inv(U) 
 
-    % adjustment to find eigenvectors of matrix inv(E)*H (page 279 Rencher) 
+    % adjustment to find eigenvectors of matrix inv(E)*H (see page 279 Rencher 2002) 
     a = inv(U)*vec; % these are the eigenvectors of inv(E)*H
 
     % sort eigenvalues and then sort eigenvectors in order of decreasing eigenvalues
-    [e,ei] = sort(diag(D));  % eigenvalues of inv(U')*H*inv(U) equal eigenvalues of inv(E)*H
+    [e,ei] = sort(diag(D));  % eigenvalues of inv(U')*H*inv(U) == eigenvalues of inv(E)*H
     ordered_eigenvalues = flipud(e);
     a = a(:,flipud(ei)); 
 
-    % validate if correct eigenvalues and eigenvectors of matrix inv(E)*H:
-    if round((inv(E)*H) * a, 4) == round(a * diag(ordered_eigenvalues), 4) % needs to be one (equal)
+    % validate if correct eigenvalues and eigenvectors of matrix inv(E)*H
+    % are returned:
+    if round((inv(E)*H) * a, 4) == round(a * diag(ordered_eigenvalues), 4) 
         eigen_vectors = a;
         eigen_values = ordered_eigenvalues;
     
@@ -51,20 +52,21 @@ if strcmpi(type,'chol')
         [vec, D] = eig((pinv(E)*H));
         
         % sort eigenvalues and then sort eigenvectors in order of decreasing eigenvalues
-        [e,ei] = sort(diag(D));  % eigenvalues of inv(U')*H*inv(U) equal eigenvalues of inv(E)*H
+        [e,ei] = sort(diag(D));  % eigenvalues of inv(U')*H*inv(U) == eigenvalues of inv(E)*H
         ordered_eigenvalues = flipud(e);
         vec = vec(:,flipud(ei));
         
         % validate if correct eigenvalues and eigenvectors of matrix pinv(E)*H:
-        if round((pinv(E)*H) * vec, 4) == round(vec * diag(ordered_eigenvalues), 4) % needs to be one (equal)
+        if round((pinv(E)*H) * vec, 4) == round(vec * diag(ordered_eigenvalues), 4)
             eigen_vectors = vec;
             eigen_values = ordered_eigenvalues;
         else
-            error('this method could not find the correct eigenvalues or eigenvectors, try new method')
+            error('this method could not find the correct eigenvalues or eigenvectors, try using SVD')
         end
     end   
-                  
-elseif strcmpi(type,'SVD')
+
+% HAS TO BE CHANGED: 
+elseif strcmpi(type,'SVD') % note: gives different/wrong eigenvalues than Rencher book.
     y = (pinv(E)*H);
     [m, n]   = size(y);
     if m > n
@@ -78,7 +80,7 @@ elseif strcmpi(type,'SVD')
         s       = diag(s);
         u       = u(:,1);
         v       = y'*u/sqrt(s(1));
-        eigen_vectors = u;
+        eigen_vectors = u; % only gives one eigenvector?
     end
     d  = sign(sum(v)); u = u*d;
     eigen_values  = u*sqrt(s(1)/n);

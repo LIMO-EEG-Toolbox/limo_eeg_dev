@@ -171,7 +171,7 @@ if nb_factors == 1   %  1-way MANOVA
     H = (Betas'*X'*M*X*Betas);  % SS Effect % only works
     % with rank deficient matrix (intercept column with ones as last column of X)
     if round(H,6) ~= round(T - E, 6) % if H is not equal to T - E problem!
-        H = T - E;
+        H = T - E; % temporary solution
     end 
     
     % Generalized R2
@@ -281,19 +281,19 @@ if nb_factors == 1   %  1-way MANOVA
         vs(vs<=0) = 1;
         a = a ./ repmat(sqrt(vs), size(a,1), 1);
         scaled_eigenvectors = a;
-        % validate if correct eigenvector
-        if round((inv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
-            errordlg('something went wrong with scaling the eigenvectors')
-        
-        weights = Eigen_values_cond ./ sum(Eigen_values_cond);
-        
-        % get the function(s)
-        for d=1:size(scaled_eigenvectors,2)
-              z(:,d) = scaled_eigenvectors(:,d)'*Y;
-        end
-               
-        % do the classification
-        end      
+%         % validate if correct eigenvector
+%         if round((inv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
+%             errordlg('something went wrong with scaling the eigenvectors')
+%         
+%         weights = Eigen_values_cond ./ sum(Eigen_values_cond);
+%         
+%         % get the function(s)
+%         for d=1:size(scaled_eigenvectors,2)
+% %              z(:,d) = scaled_eigenvectors(:,d)'*Y;
+%         end
+%                
+%         % do the classification
+%         end      
     end 
     %% 
     % ------------------------------------------------
