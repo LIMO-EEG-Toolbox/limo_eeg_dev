@@ -28,7 +28,7 @@ function model = limo_mglm(varargin)
 %
 % OUTPUTS:
 %     model.MANOVA.R2.V 
-%     model.MANOVA.R2.EV
+%     model.MANOVA.R2.EV = eigenvalues 
 %     model.MANOVA.R2.Roy.F 
 %     model.MANOVA.R2.Roy.p
 %     model.MANOVA.R2.Pillai.F
@@ -41,9 +41,12 @@ function model = limo_mglm(varargin)
 %          --> F/p in rows are the variables, in columns time frames
 %          --> df column 1 = df, column2 2 = dfe (same for all covariates)
 %
-%     model.Classification.D
+%     model.Classification.D = Discriminable values 
 %     model.Classification.cvD
-%     model.Classification.D
+%          --> Identifying the relative contribution of the electrodes to seperation of the classes.
+%          In other words, find spatial patterns that distinguish classes
+%     model.Classification.Acc --> Decoding accuracy
+%     model.Classification.cvAcc 
 %
 % NOTES:
 %
@@ -137,7 +140,7 @@ end
 % ------------------------------
 
 % -------------------------
-if nb_factors == 1   %  1-way MANOVA
+if nb_factors == 1   %  1-way MANOVA/MANCOVA
 % -------------------------
     
     % total sum of squares, projection matrix for errors, residuals and betas
@@ -192,11 +195,13 @@ if nb_factors == 1   %  1-way MANOVA
     N = (n-q-p-2)/2;
     d = max(p,q);
     
+    % Roy
     theta = max(Eigen_values_R2) / (1+max(Eigen_values_R2)); % Roy
     R2_Roy_value = theta; % = 1st canonical correlation
     R2_Roy_F     = ((n-d-1)*max(Eigen_values_R2))/d;
     R2_Roy_p     = 1-fcdf(R2_Roy_F, d, (n-d-1));
     
+    % Pillai
     V = sum(Eigen_values_R2 ./ (1+Eigen_values_R2)); % Pillai
     R2_Pillai_value = V / s; % average of canonical correlations
     R2_Pillai_F     = ((2*N+s+1)*V) / ((2*m+s+1)*(s-V)');
@@ -273,6 +278,7 @@ if nb_factors == 1   %  1-way MANOVA
     if length(Y)-nb_conditions <= nb_conditions
         errordlg('there is not enough data point to run a discriminant analysis')
     else
+        
         % rescale eigenvectors so the within-group variance is 1
         n = size(Y,1); % nb of observations (dfe)
         q = rank(X); % number of groups (df)
@@ -281,19 +287,42 @@ if nb_factors == 1   %  1-way MANOVA
         vs(vs<=0) = 1;
         a = a ./ repmat(sqrt(vs), size(a,1), 1);
         scaled_eigenvectors = a;
-%         % validate if correct eigenvector
-%         if round((inv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
-%             errordlg('something went wrong with scaling the eigenvectors')
-%         
-%         weights = Eigen_values_cond ./ sum(Eigen_values_cond);
-%         
-%         % get the function(s)
-%         for d=1:size(scaled_eigenvectors,2)
-% %              z(:,d) = scaled_eigenvectors(:,d)'*Y;
-%         end
-%                
-%         % do the classification
-%         end      
+        
+        % validate if correct eigenvector
+        if round((inv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
+            errordlg('something went wrong with scaling the eigenvectors')
+        end
+        
+        % get the discriminant function(s) 
+        z = NaN(n,s); % discriminant function(s)
+        z_importance = NaN(1,s); % relative importance of each discriminant function
+        cc_squared = NaN(1,s); % canonical correlation between each discriminant function and the class variable
+        for d=1:s
+              z(:,d) = scaled_eigenvectors(:,d)'*Y';
+              z_importance(:,d) = Eigen_values_cond(d) / sum(Eigen_values_cond(1:s));
+              cc_squared(:,d) = Eigen_values_cond(d) / (1 + Eigen_values_cond(d));
+        end
+        
+        [class,~] = find(X(:,1:nb_conditions)');
+        figure(1);gscatter(z(:,1), z(:,2), class, 'rgb', 'xo*')   
+        
+        % now, get standardized eigenvectors and standardized discriminant
+        % functions 
+        Spooled = E./(size(Y,1) - nb_conditions)
+        standardized_eigenvectors = bsxfun(@times, scaled_eigenvectors, sqrt(diag(Spooled)));
+        standardized_eigenvectors = standardized_eigenvectors(:,1:s);
+        standardized_Y = bsxfun(@rdivide,bsxfun(@minus, Y,mean(Y)), std(Y)) % or zscore(Y) check which is faster
+        
+        z_standardized = NaN(n,s); % discriminant function(s)
+        for d=1:s
+              z_standardized(:,d) = standardized_eigenvectors(:,d)'*standardized_Y';
+        end
+        figure(2);gscatter(z_standardized(:,1), z_standardized(:,2), class, 'rgb', 'xo*')   
+
+        % do the classification (assign an indvidual sampling unit
+        %[trials/subjects] to one of the classes/groups)
+        %--------------------------------------------------------
+      
     end 
     %% 
     % ------------------------------------------------
