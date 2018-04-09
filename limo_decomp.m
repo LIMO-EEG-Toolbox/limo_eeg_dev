@@ -32,10 +32,10 @@ end
 % procede
 if strcmpi(type,'chol')
     U = chol(E);
-    [vec, D] = eig(inv(U')*H*inv(U)); % vec: eigenvectors, D: diagonal matrix with eigenvalues of inv(U')*H*inv(U) 
+    [vec, D] = eig(pinv(U')*H*pinv(U)); % vec: eigenvectors, D: diagonal matrix with eigenvalues of inv(U')*H*inv(U) 
 
     % adjustment to find eigenvectors of matrix inv(E)*H (see page 279 Rencher 2002) 
-    a = inv(U)*vec; % these are the eigenvectors of inv(E)*H
+    a = pinv(U)*vec; % these are the eigenvectors of inv(E)*H
 
     % sort eigenvalues and then sort eigenvectors in order of decreasing eigenvalues
     [e,ei] = sort(diag(D));  % eigenvalues of inv(U')*H*inv(U) == eigenvalues of inv(E)*H
@@ -44,7 +44,7 @@ if strcmpi(type,'chol')
 
     % validate if correct eigenvalues and eigenvectors of matrix inv(E)*H
     % are returned:
-    if round((inv(E)*H) * a, 4) == round(a * diag(ordered_eigenvalues), 4) 
+    if round((pinv(E)*H) * a, 4) == round(a * diag(ordered_eigenvalues), 4) 
         eigen_vectors = a;
         eigen_values = ordered_eigenvalues;
     

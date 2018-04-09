@@ -27,26 +27,36 @@ function model = limo_mglm(varargin)
 %                   using these weights rather than something else
 %
 % OUTPUTS:
-%     model.MANOVA.R2.V 
-%     model.MANOVA.R2.EV = eigenvalues 
-%     model.MANOVA.R2.Roy.F 
-%     model.MANOVA.R2.Roy.p
-%     model.MANOVA.R2.Pillai.F
-%     model.MANOVA.R2.Pillai.p
-%     model.MANOVA.betas  = the beta parameters (dimensions nb of paramters x electrodes)
-%     model.MANOVA.conditions    = categorical effects
-%          --> F/p in rows are the factors, in columns time frames
+%     model.R2.V 
+%     model.R2.EV = eigenvalues 
+%     model.R2.Roy.F 
+%     model.R2.Roy.p
+%     model.R2.Pillai.F
+%     model.R2.Pillai.p
+%
+%     model.betas  = the beta parameters (dimensions nb of paramters x electrodes)
+%     model.conditions    = categorical effects
+%          --> F/p in rows are the factors
 %          --> df row 1 = df, row 2 = dfe, columns are factors
-%     model.MANOVA.continuous = continuous effects
-%          --> F/p in rows are the variables, in columns time frames
+%     model.continuous = continuous effects
+%          --> F/p in rows are the variables
 %          --> df column 1 = df, column2 2 = dfe (same for all covariates)
 %
-%     model.Classification.D = Discriminable values 
-%     model.Classification.cvD
+%     model.Discriminant.Z = discriminant functions (for plotting observations) 
+%          --> [trials/subjects x nb discriminant functions]
+%     model.Discriminant.Z_stand = standardized discriminant functions (for plotting observations) 
+%     model.Discriminant.importanceZ = relative importance of each discrim function
+%          --> considers its eigenvalue as a proportion of the total 
+%     model.Discriminant.cc_squared = squared canonical correlation
+%          --> corresponding to each discriminant function
+%     model.Discriminant.D = Discriminable values (standardized eigenvector coefficients) for plotting topography
 %          --> Identifying the relative contribution of the electrodes to seperation of the classes.
 %          In other words, find spatial patterns that distinguish classes
-%     model.Classification.Acc --> Decoding accuracy
-%     model.Classification.cvAcc 
+%          [nb of electrodes x nb of discriminant functions]
+%
+%     model.Classification.Acc = decoding accuracy
+%     model.Classification.cvAcc = 10-fold cross validated decoding accuracy
+%     model.Classification.CvSD = sd error of cross validated accuracy
 %
 % NOTES:
 %
@@ -188,18 +198,18 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
     
     [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H); 
     p = size(Y,2); % = number of variables (dimension)
-    q = rank(X); % = number of regressors (df)
+    q = rank(X)-1; % -1 because of intercept column
     s = min(p,q); % df
     n = size(Y,1); % nb of observations (dfe)
     m = (abs(q-p)-1)/2;
     N = (n-q-p-2)/2;
-    d = max(p,q);
+    ve = n - rank(X);
     
     % Roy
     theta = max(Eigen_values_R2) / (1+max(Eigen_values_R2)); % Roy
     R2_Roy_value = theta; % = 1st canonical correlation
-    R2_Roy_F     = ((n-d-1)*max(Eigen_values_R2))/d;
-    R2_Roy_p     = 1-fcdf(R2_Roy_F, d, (n-d-1));
+    R2_Roy_F     = ((ve-max(p,q)+q)*max(Eigen_values_R2))/max(p,q);
+    R2_Roy_p     = 1-fcdf(R2_Roy_F, max(p,q), ve-max(p,q)+q);
     
     % Pillai
     V = sum(Eigen_values_R2 ./ (1+Eigen_values_R2)); % Pillai
@@ -220,11 +230,10 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         X0 = X*C0; % Here the reduced model includes the covariates
         R0 = eye(size(Y,1)) - (X0*pinv(X0));
         M  = R0 - R;
-        H  = (Betas'*X'*M*X*Betas);
+        H  = (Betas'*X'*M*X*Betas); 
         [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
     end
-    
-    model.conditions.EV = [Eigen_values_cond'];
+
     vh = nb_conditions - 1; % df = q above
     s = min(vh,p); % subspace in which mean Ys are located
     for c=1:nb_conditions
@@ -237,7 +246,7 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         ve = sum(nb_items) - nb_conditions;     % dfe different sample sizes
     end
     
-    if s > 1
+    if s > 1 % (see page 165 and p.166 Rencher)
         m = (abs(vh-p)-1)/2;
         N = (ve-p-1) / 2;
         
@@ -251,17 +260,17 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         % Roy's test
         theta = max(Eigen_values_cond) / (1+max(Eigen_values_cond));
         df_conditions_Roy = max(p,vh);
-        dfe_conditions_Roy = ve - 1; % in Renchner it is proposed to use ve - max(p,vh) -1 while in Statistica it is ve -1. In R and SAS they use ve
+        %dfe_conditions_Roy = ve - 1; % in Renchner it is proposed to use ve - max(p,vh) -1  while in Statistica it is ve -1. 
+        dfe_conditions_Roy = ve - max(p,q) + q; % SAS site
         F_conditions_Roy = (dfe_conditions_Roy*max(Eigen_values_cond))/df_conditions_Roy;
         pval_conditions_Roy = 1-fcdf(F_conditions_Roy, df_conditions_Roy, dfe_conditions_Roy);
         
-    else % = only one non zeros Eigen value s = 1 and/or vh = 1
+    else % = only one non zeros Eigen value s = 1 and/or vh = 1 (see p. 169 Rencher)
         
-        V = sum(Eigen_values_cond ./ (1+Eigen_values_cond));
-        U = max(Eigen_values_cond);
-        theta = U;
-        
-        df_conditions_Pillai = p; % number of frames
+        theta = max(Eigen_values_cond) / (1+max(Eigen_values_cond)); % Roy
+        V = theta; % Pillai(1) equals theta
+     
+        df_conditions_Pillai = p; 
         dfe_conditions_Pillai = ve-p+1;
         df_conditions_Roy = df_conditions_Pillai;
         dfe_conditions_Roy = dfe_conditions_Pillai;
@@ -273,8 +282,8 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
     end
     
     %% 
-    % compute the discriminant function
-    % ---------------------------------
+    % Discriminant Analysis
+    % ----------------------------------------
     if length(Y)-nb_conditions <= nb_conditions
         errordlg('there is not enough data point to run a discriminant analysis')
     else
@@ -288,42 +297,64 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         a = a ./ repmat(sqrt(vs), size(a,1), 1);
         scaled_eigenvectors = a;
         
-        % validate if correct eigenvector
-        if round((inv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
+        % validate if correct eigenvectors
+        if round((pinv(E)*H) * scaled_eigenvectors(:,1), 4) ~= round(Eigen_values_cond(1) * scaled_eigenvectors(:,1), 4);
             errordlg('something went wrong with scaling the eigenvectors')
         end
         
         % get the discriminant function(s) 
-        z = NaN(n,s); % discriminant function(s)
-        z_importance = NaN(1,s); % relative importance of each discriminant function
-        cc_squared = NaN(1,s); % canonical correlation between each discriminant function and the class variable
-        for d=1:s
-              z(:,d) = scaled_eigenvectors(:,d)'*Y';
-              z_importance(:,d) = Eigen_values_cond(d) / sum(Eigen_values_cond(1:s));
-              cc_squared(:,d) = Eigen_values_cond(d) / (1 + Eigen_values_cond(d));
-        end
+        scaled_eigenvectors = scaled_eigenvectors(:,1:s); % s: nb nonzero eigenvalues
+        Eigen_values_cond = Eigen_values_cond(1:s); % s: nb nonzero eigenvalues
+        z = Y * scaled_eigenvectors; % the discriminant functions themself 
+        z_importance = Eigen_values_cond ./ sum(Eigen_values_cond); % variance corresponding to each eigenvalue
+        cc_squared = Eigen_values_cond ./ (1 + Eigen_values_cond); % canonical correlation
+        centered_Y = bsxfun(@minus, Y,mean(Y));     
+        centered_z = centered_Y * scaled_eigenvectors; % centered discriminant functions
         
-        [class,~] = find(X(:,1:nb_conditions)');
-        figure(1);gscatter(z(:,1), z(:,2), class, 'rgb', 'xo*')   
-        
-        % now, get standardized eigenvectors and standardized discriminant
-        % functions 
-        Spooled = E./(size(Y,1) - nb_conditions)
-        standardized_eigenvectors = bsxfun(@times, scaled_eigenvectors, sqrt(diag(Spooled)));
-        standardized_eigenvectors = standardized_eigenvectors(:,1:s);
-        standardized_Y = bsxfun(@rdivide,bsxfun(@minus, Y,mean(Y)), std(Y)) % or zscore(Y) check which is faster
-        
-        z_standardized = NaN(n,s); % discriminant function(s)
-        for d=1:s
-              z_standardized(:,d) = standardized_eigenvectors(:,d)'*standardized_Y';
-        end
-        figure(2);gscatter(z_standardized(:,1), z_standardized(:,2), class, 'rgb', 'xo*')   
+        % now, get standardized eigenvectors
+        Spooled = E./ve;
+        standardized_eigenvectors = bsxfun(@times, scaled_eigenvectors, sqrt(diag(Spooled)));                
+    end      
+    %%
+    % do the classification (assign an indvidual sampling unit
+    % [trials/subjects] to one of the classes/groups)
+    %--------------------------------------------------------
+    % k classification functions (different than the s discriminant
+    % functions)
+    [class,~] = find(X(:,1:nb_conditions)');
 
-        % do the classification (assign an indvidual sampling unit
-        %[trials/subjects] to one of the classes/groups)
-        %--------------------------------------------------------
-      
-    end 
+    meanFeaturesGroup =  grpstats(Y, class, {'mean'});
+    %L = bsxfun(@minus, (meanFeaturesGroup * pinv(Spooled) * Y'),(diag(1/2 * meanFeaturesGroup * pinv(Spooled) * meanFeaturesGroup')));
+    coeff = round(meanFeaturesGroup * pinv(Spooled),1);
+    intercept = diag(meanFeaturesGroup * pinv(Spooled) * meanFeaturesGroup')/2;
+    L = (coeff * Y') - repmat(intercept,1,n); % page 306
+
+    % get training linear decoding accuracy:
+    LinearModel = fitcdiscr(Y,class); 
+    training_Acc = sum(diag(confusionmat(LinearModel.Y, predict(LinearModel, Y))))/sum(sum(confusionmat(LinearModel.Y, predict(LinearModel, Y))));
+    
+    % get CV linear decoding accuracy:
+    LinearModel_CV = fitcdiscr(Y,class, 'CrossVal', 'on'); 
+    acc = NaN(1,LinearModel_CV.KFold);
+    for k=1:LinearModel_CV.KFold
+        acc(k) = sum(diag(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))));
+    end
+    cvAcc = mean(acc);
+    cvSD  = sqrt(sum((acc - mean(acc)).^2)/(LinearModel_CV.KFold-1));
+    
+    % get training quadratic decoding accuracy:
+    QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'quadratic');
+    q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));
+    
+    % get CV quadratic decoding accuracy:
+    QuadraticModel_CV = fitcdiscr(Y, class, 'DiscrimType', 'quadratic', 'CrossVal', 'on');    
+    q_acc = NaN(1,QuadraticModel_CV.KFold);
+    for k=1:QuadraticModel_CV.KFold
+        q_acc(k) = sum(diag(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))));
+    end
+    q_cvAcc = mean(q_acc);
+    q_cvSD  = sqrt(sum((q_acc - mean(q_acc)).^2)/(QuadraticModel_CV.KFold-1));
+    
     %% 
     % ------------------------------------------------
 elseif nb_factors > 1  && isempty(nb_interactions) % N-ways MANOVA without interactions
@@ -915,6 +946,7 @@ model.R2.Pillai.p = R2_Pillai_p;
 model.betas = Betas;
 
 if nb_conditions ~= 0  
+    model.conditions.EV           = [Eigen_values_cond'];
     model.conditions.Pillai.F     = F_conditions_Pillai;
     model.conditions.Pillai.p     = pval_conditions_Pillai;
     model.conditions.Pillai.df    = df_conditions_Pillai;
@@ -923,6 +955,28 @@ if nb_conditions ~= 0
     model.conditions.Roy.p        = pval_conditions_Roy;
     model.conditions.Roy.df       = df_conditions_Roy;
     model.conditions.Roy.dfe      = dfe_conditions_Roy;
+end
+
+if nb_factors == 1  
+    model.conditions.importanceEV  = z_importance * 100; % to see in how many dimension the mean vectors lie in (guide using Roy or Pillai)
+    
+    % outcomes from Discriminant Analysis:
+    model.Discriminant.D           = standardized_eigenvectors;
+    model.Discriminant.importanceZ = z_importance * 100; % so also shows the relative importance of each discriminant function:
+    model.Discriminant.cc_squared  = cc_squared;
+    model.Discriminant.Z           = z;
+    model.Discriminant.Z_cent     = centered_z;
+    model.Discriminant.cc_squared  = cc_squared; 
+    
+    % outcome from Classification:
+    model.Classification.Linear.Acc       = training_Acc;
+    model.Classification.Linear.cvAcc     = cvAcc;
+    model.Classification.Linear.cvSD      = cvSD;
+    
+    model.Classification.Quadratic.Acc       = q_training_Acc;
+    model.Classification.Quadratic.cvAcc     = q_cvAcc;
+    model.Classification.Quadratic.cvSD      = q_cvSD;
+
 end
 
 if nb_interactions ~= 0
