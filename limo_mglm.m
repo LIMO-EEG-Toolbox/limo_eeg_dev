@@ -342,19 +342,33 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
     cvAcc = mean(acc);
     cvSD  = sqrt(sum((acc - mean(acc)).^2)/(LinearModel_CV.KFold-1));
     
-    % get training quadratic decoding accuracy:
-    QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'quadratic');
-    q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));
-    
-    % get CV quadratic decoding accuracy:
-    QuadraticModel_CV = fitcdiscr(Y, class, 'DiscrimType', 'quadratic', 'CrossVal', 'on');    
-    q_acc = NaN(1,QuadraticModel_CV.KFold);
-    for k=1:QuadraticModel_CV.KFold
-        q_acc(k) = sum(diag(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))));
+    try
+        % get training quadratic decoding accuracy:
+        QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'quadratic');
+        q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));
+
+        % get CV quadratic decoding accuracy:
+        QuadraticModel_CV = fitcdiscr(Y, class, 'DiscrimType', 'quadratic', 'CrossVal', 'on');    
+        q_acc = NaN(1,QuadraticModel_CV.KFold);
+        for k=1:QuadraticModel_CV.KFold
+            q_acc(k) = sum(diag(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))));
+        end
+        q_cvAcc = mean(q_acc);
+        q_cvSD  = sqrt(sum((q_acc - mean(q_acc)).^2)/(QuadraticModel_CV.KFold-1));
+    catch
+        % get training quadratic decoding accuracy:
+        QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'pseudoquadratic');
+        q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));
+
+        % get CV quadratic decoding accuracy:
+        QuadraticModel_CV = fitcdiscr(Y, class, 'DiscrimType', 'pseudoquadratic', 'CrossVal', 'on');    
+        q_acc = NaN(1,QuadraticModel_CV.KFold);
+        for k=1:QuadraticModel_CV.KFold
+            q_acc(k) = sum(diag(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))));
+        end
+        q_cvAcc = mean(q_acc);
+        q_cvSD  = sqrt(sum((q_acc - mean(q_acc)).^2)/(QuadraticModel_CV.KFold-1));     
     end
-    q_cvAcc = mean(q_acc);
-    q_cvSD  = sqrt(sum((q_acc - mean(q_acc)).^2)/(QuadraticModel_CV.KFold-1));
-    
     %% 
     % ------------------------------------------------
 elseif nb_factors > 1  && isempty(nb_interactions) % N-ways MANOVA without interactions
@@ -962,6 +976,7 @@ if nb_factors == 1
     
     % outcomes from Discriminant Analysis:
     model.Discriminant.D           = standardized_eigenvectors;
+    model.Discriminant.scaledEV_coef = scaled_eigenvectors;
     model.Discriminant.importanceZ = z_importance * 100; % so also shows the relative importance of each discriminant function:
     model.Discriminant.cc_squared  = cc_squared;
     model.Discriminant.Z           = z;
