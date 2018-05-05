@@ -330,11 +330,11 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
     L = (coeff * Y') - repmat(intercept,1,n); % page 306
 
     % get training linear decoding accuracy:
-    LinearModel = fitcdiscr(Y,class); 
+    LinearModel = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear'); 
     training_Acc = sum(diag(confusionmat(LinearModel.Y, predict(LinearModel, Y))))/sum(sum(confusionmat(LinearModel.Y, predict(LinearModel, Y))));
     
     % get CV linear decoding accuracy:
-    LinearModel_CV = fitcdiscr(Y,class, 'CrossVal', 'on'); 
+    LinearModel_CV = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear','CrossVal', 'on'); 
     acc = NaN(1,LinearModel_CV.KFold);
     for k=1:LinearModel_CV.KFold
         acc(k) = sum(diag(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))));

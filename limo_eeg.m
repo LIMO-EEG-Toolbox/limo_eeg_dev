@@ -13,9 +13,9 @@ function limo_eeg(varargin)
 %
 % INPUT limo_eeg(value,option)
 %                 1 - load the GUI
-%                 2,X - call limo_import (time X=1 or freuqency X=2), creating LIMO.mat file and call limo_egg(3)
+%                 2,X - call limo_import (time X=1 or freuqency X=2), creating LIMO.mat file and call limo_eeg(3)
 %                 3 - call limo_design_matrix and populate LIMO.design
-%                 4 - call limo_glm (mass univariate) or limo_glm2 (multivariate) 
+%                 4 - call limo_glm (mass univariate) or limo_mglm (multivariate) 
 %                 5 - shortcut to limo_results, look at possible results and print a report
 %                 6,C - shortcut to limo_contrast for the current directory,
 %                 ask for a list of contrasts if not given as 2nd argument) and run them all
@@ -125,7 +125,7 @@ switch varargin{1}
         if ~strcmp(out,'LIMO import aborded')
             try
                 load LIMO
-                if LIMO.design.bootstrap == 1
+                if LIMO.design.bootstrap ~=0
                     if ~isfield(LIMO.data,'neighbouring_matrix')
                         answer = questdlg('load or compute neighbouring matrix?','channel neighbouring definition','Load','Compute','Compute');
                         if strcmp(answer,'Load')
@@ -1012,10 +1012,10 @@ switch varargin{1}
                     LIMO.design.weights = W;
                 end
                 
-                % 2nd run the multivariate analysis over electrodes
+                % 2nd run the multivariate analysis over time frames
                 for t = 1:size(Yr,2)
                     fprintf('analysing time frame %g/%g \n',t,size(Yr,2));
-                    model = limo_mglm(squeeze(Yr(:,t,:))',LIMO); warning off;
+                    model = limo_mglm(squeeze(Yr(:,t,:))',LIMO); %warning off;
                     
                     % update the LIMO.mat
                     if update == 1
@@ -1037,6 +1037,8 @@ switch varargin{1}
                     Res(:,t,:)  = squeeze(Yr(:,t,:)) - fitted_data'; clear fitted_data
                     R2{t}       = model.R2;
                     Betas(:,t,:) = model.betas';
+                    Discriminant(t) = model.Discriminant;
+                    Classification(t) = model.Classification;
                     
                     if prod(LIMO.design.nb_conditions) ~=0
                         if length(LIMO.design.nb_conditions) == 1
@@ -1088,8 +1090,30 @@ switch varargin{1}
                 save Res Res; save Betas Betas;
                 clear Yhat Res Betas
                 
-                % R2 data
-                name = sprintf('R2_EV',i); R2_EV = NaN(size(Yr,1),size(Yr,2));
+                % Discriminant data:
+                save Discriminant Discriminant;
+                
+                name = sprintf('Discriminant_coeff',t); Discriminant_coeff = NaN(size(Yr,1),size(Yr,2), size(Discriminant(1).D,2));
+                for t=1:size(Yr,2); Discriminant_coeff(:,t,:) = Discriminant(t).D; end
+                save(name,'Discriminant_coeff','-v7.3') % [p electrodes x t time frames x s]
+                
+                name = sprintf('Discriminant_scores',t); Discriminant_scores = NaN(size(Discriminant(1).D,2),size(Yr,2), size(Yr,3));
+                for t=1:size(Yr,2); Discriminant_scores(:,t,:) = Discriminant(t).Z_cent'; end
+                save(name,'Discriminant_scores','-v7.3') % [p electrodes x t time frames x s]
+                
+                % Classifcation data:
+                save Classication Classification;
+                
+                name = sprintf('Linear_Classification',t); Linear_Classification = NaN(size(Yr,2),3);
+                for t=1:size(Yr,2); Linear_Classification(t,:) = struct2array(Classification(t).Linear); end
+                save(name,'Linear_Classification','-v7.3') % [t time frames x 3 (Acc, cvAcc, csSD)]
+                
+                name = sprintf('Quadratic_Classification',t); Quadratic_Classification = NaN(size(Yr,2),3);
+                for t=1:size(Yr,2); Quadratic_Classification(t,:) = struct2array(Classification(t).Quadratic); end
+                save(name,'Quadratic_Classification','-v7.3') % [t time frames x 3 (Acc, cvAcc, csSD)]
+                
+                % R2 data:
+                name = sprintf('R2_EV',t); R2_EV = NaN(size(Yr,1),size(Yr,2));
                 for t=1:size(Yr,2); R2_EV(:,t) = real(R2{t}.EV); end
                 save(name,'R2_EV','-v7.3')
                 name = sprintf('R2'); tmp = NaN(size(Yr,2),5);
@@ -1160,10 +1184,184 @@ switch varargin{1}
                 clear file electrode filename model reg dir i W
             end
             
-            
-            % if bootsrrap
-            if LIMO.design.bootstrap == 1
+           
+            % as above for bootstrap under H0
+            % ------------------------------- 
+            boot_go = 0;
+            % if bootstrap
+            if LIMO.design.bootstrap ~=0
+                % avoid overwriting / recomputing H0 if done
+                % (limo_eeg(4) called via the results interface)
+                if ~exist('H0','dir')
+                    boot_go = 1;
+                else
+                    ow = questdlg('overwrite H0?','limo check','yes','no','yes');
+                    if strcmp(ow,'yes')
+                        boot_go = 1;
+                    end
+                end
+                
             end
+            
+            if boot_go == 1
+                try
+                    fprintf('\n %%%%%%%%%%%%%%%%%%%%%%%% \n Bootstrapping data with the MGLM can take a while, be patient .. \n %%%%%%%%%%%%%%%%%%%%%%%% \n')
+                    mkdir H0; load Yr;
+ 
+                    if LIMO.design.bootstrap <= 800
+                        nboot = 800;
+                    else
+                        nboot = LIMO.design.bootstrap;
+                    end
+                    
+                    if LIMO.Level == 2
+                        %boot_table = limo_create_boot_table(Yr,nboot);
+                        boot_table = randi(size(Yr,3),size(Yr,3),nboot); % form mutlivariate boot_table first and second level are the same?
+                    else
+                        boot_table = randi(size(Yr,3),size(Yr,3),nboot);
+                    end
+                    
+                    H0_Betas = NaN(size(Yr,1), size(Yr,2), size(LIMO.design.X,2), nboot);
+                    H0_R2_Pillai = NaN(size(Yr,2), 3, nboot); % stores R, F and p values for each boot
+                    H0_R2_Roy = NaN(size(Yr,2), 3, nboot); % stores R, F and p values for each boot
+                    H0_Classification_Linear = NaN(size(Yr,2), nboot);
+                    H0_Classification_Quadratic = NaN(size(Yr,2),nboot);
+                    
+                    if LIMO.design.nb_conditions ~= 0
+                        tmp_H0_Conditions_Pillai = NaN(size(Yr,2), length(LIMO.design.nb_continuous), 2, nboot);
+                        tmp_H0_Conditions_Roy = NaN(size(Yr,2), length(LIMO.design.nb_continuous), 2, nboot);
+                    end
+                    
+                    if LIMO.design.nb_interactions ~=0
+                        tmp_H0_Interaction_effect_Pillai = NaN(size(Yr,2),length(LIMO.design.nb_interactions), 2, nboot);
+                    end
+                    
+                    if LIMO.design.nb_continuous ~= 0
+                        tmp_H0_Covariates_Pillai = NaN(size(Yr,2), LIMO.design.nb_continuous, 2, nboot);
+                    end
+                    
+                    %warning off;
+                    X = LIMO.design.X;
+                    h = waitbar(0,'bootstraping data','name','% done');
+                    for t = 1:size(Yr,2)
+                        waitbar(t/size(Yr,2))
+                        fprintf('bootstrapping time frame %g/%g \n',t,size(Yr,2));
+                        if LIMO.Level == 2
+                            Y = squeeze(Yr(:,t,:));
+                            index = find(~isnan(Y(1,:))); % only include non-missing subjects
+                            model = limo_mglm_boot(Y(:,index)',X(index,:),LIMO.design.nb_conditions,LIMO.design.nb_interactions,LIMO.design.nb_continuous,LIMO.design.method,boot_table);
+                        else
+                            % index = [1:size(Yr,3)];
+                            model = limo_mglm_boot(squeeze(Yr(:,t,:))',LIMO,boot_table);
+                        end
+                        
+                        % update the files to be stored on the disk
+                        H0_Betas(:,t,:,:) = model.Betas;
+                        
+                        for B = 1:nboot % now loop because we use cells
+                            H0_R2_Pillai(t,1,B) = model.R2{B};
+                            H0_R2_Pillai(t,2,B) = model.F.Pillai{B};
+                            H0_R2_Pillai(t,3,B) = model.p.Pillai{B};
+                            H0_R2_Roy(t,1,B) = model.R2{B};
+                            H0_R2_Roy(t,2,B) = model.F.Roy{B};
+                            H0_R2_Roy(t,3,B) = model.p.Roy{B};
+                            H0_Classification_Linear(t,B) = model.Classification.Linear{B};
+                            H0_Classification_Linear(t,B) = model.Classification.Quadratic{B};
+                            
+                            if prod(LIMO.design.nb_conditions) ~=0
+                                if length(LIMO.design.nb_conditions) == 1
+                                    tmp_H0_Conditions_Pillai(t,1,1,B) = model.conditions.F.Pillai{B};
+                                    tmp_H0_Conditions_Pillai(t,1,2,B) = model.conditions.p.Pillai{B};
+                                    tmp_H0_Conditions_Roy(t,1,1,B) = model.conditions.F.Roy{B};
+                                    tmp_H0_Conditions_Roy(t,1,2,B) = model.conditions.p.Roy{B};
+                                else
+                                    for i=1:length(LIMO.design.nb_conditions)
+                                        tmp_H0_Conditions_Pillai(t,i,1,B) = model.conditions.F.Pillai{B}(i,:);
+                                        tmp_H0_Conditions_Pillai(t,i,2,B) = model.conditions.p.Pillai{B}(i,:);
+                                        tmp_H0_Conditions_Roy(t,i,1,B) = model.conditions.F.Roy{B}(i,:);
+                                        tmp_H0_Conditions_Roy(t,i,2,B) = model.conditions.p.Roy{B}(i,:);
+                                    end
+                                end
+                            end
+                            
+                            if LIMO.design.fullfactorial == 1
+                                if length(LIMO.design.nb_interactions) == 1
+                                    tmp_H0_Interaction_effect_Pillai(t,1,1,B) = model.interactions.F.Pillai{B};
+                                    tmp_H0_Interaction_effect_Pillai(t,1,2,B) = model.interactions.p.Pillai{B};
+                                else
+                                    for i=1:length(LIMO.design.nb_interactions)
+                                        tmp_H0_Interaction_effect_Pillai(t,i,1,B) = model.interactions.F.Pillai{B}(i,:);
+                                        tmp_H0_Interaction_effect_Pillai(t,i,2,B) = model.interactions.p.Pillai{B}(i,:);
+                                    end
+                                end
+                            end
+                            
+                            if LIMO.design.nb_continuous ~=0
+                                if LIMO.design.nb_continuous == 1
+                                    tmp_H0_Covariates_Pillai(t,1,1,B) = model.continuous.F.Pillai{B};
+                                    tmp_H0_Covariates_Pillai(t,1,2,B) = model.continuous.p.Pillai{B};
+                                else
+                                    for i=1:LIMO.design.nb_continuous
+                                        tmp_H0_Covariates_Pillai(t,i,1,B) = model.continuous.F.Pillai{B}(:,i);
+                                        tmp_H0_Covariates_Pillai(t,i,2,B) = model.continuous.p.Pillai{B}(:,i);
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    close(h)
+                    warning on;
+                    
+                    % save data on the disk and clear out
+                    cd H0
+                    save boot_table boot_table
+                    save H0_Betas H0_Betas -v7.3
+                    save H0_R2_Pillai H0_R2_Pillai -v7.3
+                    save H0_R2_Roy H0_R2_Roy -v7.3
+                    
+                    
+                    if prod(LIMO.design.nb_conditions) ~=0
+                        for i=1:length(LIMO.design.nb_conditions)
+                            name = sprintf('H0_Condition_effect_Pillai_%g',i);
+                            H0_Condition_effect_Pillai = squeeze(tmp_H0_Conditions_Pillai(:,i,:,:));
+                            save(name,'H0_Condition_effect_Pillai','-v7.3');
+                            name = sprintf('H0_Condition_effect_Roy_%g',i);
+                            H0_Condition_effect_Roy = squeeze(tmp_H0_Conditions_Roy(:,i,:,:));
+                            save(name,'H0_Condition_effect_Roy','-v7.3');                            
+                            clear H0_Condition_effect_Pillai HO_Condition_effect_Roy
+                        end
+                        clear tmp_H0_Conditions_Pillai tmp_H0_Conditions_Roy
+                    end
+                    
+                    if LIMO.design.fullfactorial == 1
+                        for i=1:length(LIMO.design.nb_interactions)
+                            name = sprintf('H0_Interaction_effect_Pillai_%g',i);
+                            H0_Interaction_effect_Pillai = squeeze(tmp_H0_Interaction_effect_Pillai(:,i,:,:));
+                            save(name,'H0_Interaction_effect_Pillai','-v7.3');
+                            clear H0_Interaction_effect_Pillai
+                        end
+                        clear tmp_H0_Interaction_effect_Pillai
+                    end
+                    
+                    if LIMO.design.nb_continuous ~=0
+                        for i=1:LIMO.design.nb_continuous
+                            name = sprintf('H0_Covariate_effect_Pillai_%g',i);
+                            H0_Covariate_effect_Pillai = squeeze(tmp_H0_Covariates_Pillai(:,i,:,:));
+                            save(name,'H0_Covariate_effect_Pillai','-v7.3');
+                            clear H0_Covariate_effect_Pillai
+                        end
+                        clear tmp_H0_Covariates_Pillai
+                    end
+                    
+                    clear t model H0_R2_Pillai HO_R2_Roy; cd ..
+                    disp(' ');
+                    
+                catch boot_error
+                    disp('an error occured while attempting to bootstrap the data')
+                    fprintf('%s \n',boot_error.message); return
+                end
+            end
+            
             
             % TFCE if requested
             if LIMO.design.tfce == 1
@@ -1196,7 +1394,7 @@ switch varargin{1}
         
         % R2
         % ---
-        if LIMO.design.bootstrap == 1
+        if LIMO.design.bootstrap ~=0
             if LIMO.design.tfce == 1
                 limo_display_results(1,'R2.mat',pwd,0.05,3,LIMO,0);
             else
@@ -1212,7 +1410,7 @@ switch varargin{1}
         if prod(LIMO.design.nb_conditions) ~=0
             for i=1:length(LIMO.design.nb_conditions)
                 name = sprintf('Condition_effect_%g.mat',i);
-                if LIMO.design.bootstrap == 1
+                if LIMO.design.bootstrap ~=0
                     if LIMO.design.tfce == 1
                         limo_display_results(1,name,pwd,0.05,3,LIMO,0);
                     else
@@ -1230,7 +1428,7 @@ switch varargin{1}
         if LIMO.design.fullfactorial == 1
             for i=1:length(LIMO.design.nb_interactions)
                 name = sprintf('Interaction_effect_%g.mat',i);
-                if LIMO.design.bootstrap == 1
+                if LIMO.design.bootstrap ~=0
                     if LIMO.design.tfce == 1
                         limo_display_results(1,name,pwd,0.05,3,LIMO,0);
                     else
@@ -1248,7 +1446,7 @@ switch varargin{1}
         if LIMO.design.nb_continuous ~=0
             for i=1:LIMO.design.nb_continuous
                 name = sprintf('Covariate_effect_%g.mat',i);
-                if LIMO.design.bootstrap == 1
+                if LIMO.design.bootstrap ~=0
                     if LIMO.design.tfce == 1
                         limo_display_results(1,name,pwd,0.05,3,LIMO,0);
                     else
