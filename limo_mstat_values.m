@@ -3,7 +3,7 @@ function [M, mask, mytitle] = limo_mstat_values(varargin)
 % find corrected p values and mask from data under H0
 % this file is more multivariate statistics only
 %
-% FORMAT [M, mask, mytitle] = limo_stat_values2(varargin)
+% FORMAT [M, mask, mytitle] = limo_mstat_values(varargin)
 %
 % INPUTS 
 %         Type = the type of plots (matters for title)
@@ -140,9 +140,9 @@ elseif strncmp(FileName,'Condition_effect',16)
     
     effect_nb = eval(FileName(18:end-4));
     if strcmp(choice,'Roy')
-        M = squeeze(Condition_effect(:,1)); % F values
+        M = squeeze(Condition_effect(:,1)); % F values Roy
     else
-        M = squeeze(Condition_effect(:,3));
+        M = squeeze(Condition_effect(:,3)); % F values Pillai
     end
     MCC_data = 'H0_Condition_effect.mat';
     
@@ -150,8 +150,8 @@ elseif strncmp(FileName,'Condition_effect',16)
     % -----------------------------------
     if MCC == 1
         
-        if LIMO.design.bootstrap == 1
-            try cd('H0');load(MCC_data); cd ..
+        if LIMO.design.bootstrap >= 1
+            try cd('H0');load('H0_Condition_effect_1'); cd ..
                 if strcmp(choice,'Roy')
                     H0_F_values = squeeze(H0_Condition_effect(:,1,:)); clear H0_Condition_effect;
                 else
@@ -164,27 +164,27 @@ elseif strncmp(FileName,'Condition_effect',16)
                     tmp(column) = sum(M(column)>squeeze(sorted_values(column,:)));
                 end
                 M = 1- (tmp ./ size(sorted_values,2)) ; % p values
-                mytitle = sprintf('Condition_effect : uncorrected threshold \n based on bootstraped F values');
+                mytitle = sprintf('Condition effect : uncorrected threshold \n based on bootstraped F values');
             catch ME
                 if strcmp(choice,'Roy')
                     mask = Condition_effect(:,2) < p;
                     M = squeeze(Condition_effect(:,2)); % p values
-                    mytitle = sprintf('Condition_effect : uncorrected threshold \n based on Roy test');
+                    mytitle = sprintf('Condition effect : uncorrected threshold \n based on Roy test');
                 else
                     mask = Condition_effect(:,4) < p;
                     M = squeeze(Condition_effect(:,4)); % p values
-                    mytitle = sprintf('Condition_effect : uncorrected threshold \n based on Pillai test');
+                    mytitle = sprintf('Condition effect : uncorrected threshold \n based on Pillai test');
                 end
             end
         else
             if strcmp(choice,'Roy')
                 mask = Condition_effect(:,2) < p;
                 M = squeeze(Condition_effect(:,2)); % p values
-                mytitle = sprintf('Condition_effect : uncorrected threshold \n based on Roy test');
+                mytitle = sprintf('Condition effect : uncorrected threshold \n based on Roy test');
             else
                 mask = Condition_effect(:,4) < p;
                 M = squeeze(Condition_effect(:,4)); % p values
-                mytitle = sprintf('Condition_effect : uncorrected threshold \n based on Pillai test');
+                mytitle = sprintf('Condition effect : uncorrected threshold \n based on Pillai test');
             end
         end
         mask = mask' ; M = M'; 

@@ -47,7 +47,7 @@ if nargin == 2 || nargin == 3
     end
     
     if nargin == 2
-        boot_table = randi(size(Y,1), size(Y,1), nboot); % resample observations (trials/subjects)
+        boot_table = randi(size(y,1), size(y,1), nboot); % resample observations (trials/subjects)
     elseif nargin == 3
         boot_table = varargin{3};
         nboot = size(boot_table,2);
@@ -64,7 +64,7 @@ elseif nargin >= 6
         boot_table  = varargin(7);
         nboot = size(boot_table); 
     elseif nargin == 6
-        boot_table = randi(size(Y,1), size(Y,1),nboot); % resample observations (trials/subjects)
+        boot_table = randi(size(y,1), size(y,1),nboot); % resample observations (trials/subjects)
     end
     
 else
@@ -388,8 +388,9 @@ parfor B = 1:nboot
     F_CONDVALUES_Roy{B}  = F_conditions_Roy;
     p_CONDVALUES_Roy{B}  = pval_conditions_Roy;  
     
-    Classification_Linear{B} = training_Acc; %overestimate but good under H0
-    Classification_Quadratic{B} = q_training_Acc; %overestimate but good under H0
+    Linear_Classification{B} = training_Acc; %overestimate but good under H0
+    Quadratic_Classification{B} = q_training_Acc; %overestimate but good under H0
+    
 end
 
 model.R2 = MODELR2;
@@ -407,7 +408,7 @@ try
     model.conditions.p.Roy  = p_CONDVALUES_Roy;
     %DISCRIMINANT - is descriptive
     %CLASSIFICATION
-    model.Classification.Linear = Classification_Linear;
-    model.Classification.Quadratic = Classification_Quadratic;    
+    model.Classification.Linear = Linear_Classification;
+    model.Classification.Quadratic = Quadratic_Classification;    
 end
 end

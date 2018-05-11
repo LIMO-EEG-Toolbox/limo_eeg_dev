@@ -998,7 +998,7 @@ switch varargin{1}
                 W = ones(size(Yr));
             end
             
-            % -------------- loop the analysis time frames per time frames
+            % -------------- loop the analysis time frame per time frame
             
             if strcmp(LIMO.design.status,'to do')
                 
@@ -1039,7 +1039,7 @@ switch varargin{1}
                     Betas(:,t,:) = model.betas';
                     Discriminant(t) = model.Discriminant;
                     Classification(t) = model.Classification;
-                    
+                    s = size(model.R2.EV,1); %used later on (number of non-zero eigenvalues, rank of H)
                     if prod(LIMO.design.nb_conditions) ~=0
                         if length(LIMO.design.nb_conditions) == 1
                             tmp_Condition_effect{t} = model.conditions;
@@ -1090,20 +1090,16 @@ switch varargin{1}
                 save Res Res; save Betas Betas;
                 clear Yhat Res Betas
                 
-                % Discriminant data:
-                save Discriminant Discriminant;
-                
-                name = sprintf('Discriminant_coeff',t); Discriminant_coeff = NaN(size(Yr,1),size(Yr,2), size(Discriminant(1).D,2));
+                % Discriminant data:                
+                name = sprintf('Discriminant_coeff',t); Discriminant_coeff = NaN(size(Yr,1),size(Yr,2),s);
                 for t=1:size(Yr,2); Discriminant_coeff(:,t,:) = Discriminant(t).D; end
                 save(name,'Discriminant_coeff','-v7.3') % [p electrodes x t time frames x s]
                 
-                name = sprintf('Discriminant_scores',t); Discriminant_scores = NaN(size(Discriminant(1).D,2),size(Yr,2), size(Yr,3));
+                name = sprintf('Discriminant_scores',t); Discriminant_scores = NaN(s,size(Yr,2), size(Yr,3));
                 for t=1:size(Yr,2); Discriminant_scores(:,t,:) = Discriminant(t).Z_cent'; end
-                save(name,'Discriminant_scores','-v7.3') % [p electrodes x t time frames x s]
+                save(name,'Discriminant_scores','-v7.3') % [s x  t time frames x n obs]
                 
-                % Classifcation data:
-                save Classication Classification;
-                
+                % Classifcation data:                
                 name = sprintf('Linear_Classification',t); Linear_Classification = NaN(size(Yr,2),3);
                 for t=1:size(Yr,2); Linear_Classification(t,:) = struct2array(Classification(t).Linear); end
                 save(name,'Linear_Classification','-v7.3') % [t time frames x 3 (Acc, cvAcc, csSD)]
@@ -1113,9 +1109,14 @@ switch varargin{1}
                 save(name,'Quadratic_Classification','-v7.3') % [t time frames x 3 (Acc, cvAcc, csSD)]
                 
                 % R2 data:
-                name = sprintf('R2_EV',t); R2_EV = NaN(size(Yr,1),size(Yr,2));
+                name = sprintf('R2_EV',t); R2_EV = NaN(s,size(Yr,2));
                 for t=1:size(Yr,2); R2_EV(:,t) = real(R2{t}.EV); end
                 save(name,'R2_EV','-v7.3')
+                
+                name = sprintf('R2_EV_var',t); R2_EV_var = NaN(s,size(Yr,2));
+                for t=1:size(Yr,2); R2_EV_var(:,t) = model.R2.varEV; end
+                save(name,'R2_EV_var','-v7.3')
+                
                 name = sprintf('R2'); tmp = NaN(size(Yr,2),5);
                 for t=1:size(Yr,2); tmp(t,:) = [R2{t}.V R2{t}.Roy.F R2{t}.Roy.p R2{t}.Pillai.F R2{t}.Pillai.p]; end
                 R2 = tmp; save(name,'R2','-v7.3')
@@ -1127,7 +1128,12 @@ switch varargin{1}
                         if length(LIMO.design.nb_conditions) == 1
                             for t=1:size(Yr,2); Condition_effect_EV(:,t) = real(tmp_Condition_effect{t}.EV); end
                             save(name,'Condition_effect_EV','-v7.3')
-                            name = sprintf('Condition_effect_%g',i);
+                            
+                            name = sprintf('Condition_effect_%g_EV_var',i);
+                            for t=1:size(Yr,2); Condition_effect_EV_var(:,t) = model.conditions.varEV; end
+                            save(name,'Condition_effect_EV_var','-v7.3')
+                            
+                            name = sprintf('Condition_effect_%g',i);                            
                             for t=1:size(Yr,2); Condition_effect(t,:) = [tmp_Condition_effect{t}.Roy.F tmp_Condition_effect{t}.Roy.p tmp_Condition_effect{t}.Pillai.F tmp_Condition_effect{t}.Pillai.p]; end
                             save(name,'Condition_effect','-v7.3')
                         else
@@ -1222,22 +1228,20 @@ switch varargin{1}
                     end
                     
                     H0_Betas = NaN(size(Yr,1), size(Yr,2), size(LIMO.design.X,2), nboot);
-                    H0_R2_Pillai = NaN(size(Yr,2), 3, nboot); % stores R, F and p values for each boot
-                    H0_R2_Roy = NaN(size(Yr,2), 3, nboot); % stores R, F and p values for each boot
-                    H0_Classification_Linear = NaN(size(Yr,2), nboot);
-                    H0_Classification_Quadratic = NaN(size(Yr,2),nboot);
+                    H0_R2 = NaN(size(Yr,2), 5, nboot); % stores R, F and p values for each boot
+                    H0_Linear_Classification = NaN(size(Yr,2), nboot);
+                    H0_Quadratic_Classification = NaN(size(Yr,2),nboot);
                     
                     if LIMO.design.nb_conditions ~= 0
-                        tmp_H0_Conditions_Pillai = NaN(size(Yr,2), length(LIMO.design.nb_continuous), 2, nboot);
-                        tmp_H0_Conditions_Roy = NaN(size(Yr,2), length(LIMO.design.nb_continuous), 2, nboot);
+                        tmp_H0_Conditions = NaN(size(Yr,2), length(LIMO.design.nb_conditions), 4, nboot);
                     end
                     
                     if LIMO.design.nb_interactions ~=0
-                        tmp_H0_Interaction_effect_Pillai = NaN(size(Yr,2),length(LIMO.design.nb_interactions), 2, nboot);
+                        tmp_H0_Interaction_effect_Pillai = NaN(size(Yr,2),length(LIMO.design.nb_interactions), 4, nboot);
                     end
                     
                     if LIMO.design.nb_continuous ~= 0
-                        tmp_H0_Covariates_Pillai = NaN(size(Yr,2), LIMO.design.nb_continuous, 2, nboot);
+                        tmp_H0_Covariates_Pillai = NaN(size(Yr,2), LIMO.design.nb_continuous, 4, nboot);
                     end
                     
                     %warning off;
@@ -1259,27 +1263,26 @@ switch varargin{1}
                         H0_Betas(:,t,:,:) = model.Betas;
                         
                         for B = 1:nboot % now loop because we use cells
-                            H0_R2_Pillai(t,1,B) = model.R2{B};
-                            H0_R2_Pillai(t,2,B) = model.F.Pillai{B};
-                            H0_R2_Pillai(t,3,B) = model.p.Pillai{B};
-                            H0_R2_Roy(t,1,B) = model.R2{B};
-                            H0_R2_Roy(t,2,B) = model.F.Roy{B};
-                            H0_R2_Roy(t,3,B) = model.p.Roy{B};
-                            H0_Classification_Linear(t,B) = model.Classification.Linear{B};
-                            H0_Classification_Linear(t,B) = model.Classification.Quadratic{B};
+                            H0_R2(t,1,B) = model.R2{B};
+                            H0_R2(t,2,B) = model.F.Roy{B};
+                            H0_R2(t,3,B) = model.p.Roy{B};
+                            H0_R2(t,4,B) = model.F.Pillai{B};
+                            H0_R2(t,5,B) = model.p.Pillai{B};
+                            H0_Linear_Classification(t,B) = model.Classification.Linear{B};
+                            H0_Quadratic_Classification(t,B) = model.Classification.Quadratic{B};
                             
                             if prod(LIMO.design.nb_conditions) ~=0
                                 if length(LIMO.design.nb_conditions) == 1
-                                    tmp_H0_Conditions_Pillai(t,1,1,B) = model.conditions.F.Pillai{B};
-                                    tmp_H0_Conditions_Pillai(t,1,2,B) = model.conditions.p.Pillai{B};
-                                    tmp_H0_Conditions_Roy(t,1,1,B) = model.conditions.F.Roy{B};
-                                    tmp_H0_Conditions_Roy(t,1,2,B) = model.conditions.p.Roy{B};
+                                    tmp_H0_Conditions(t,1,1,B) = model.conditions.F.Roy{B};
+                                    tmp_H0_Conditions(t,1,2,B) = model.conditions.p.Roy{B};
+                                    tmp_H0_Conditions(t,1,3,B) = model.conditions.F.Pillai{B};
+                                    tmp_H0_Conditions(t,1,4,B) = model.conditions.p.Pillai{B};
                                 else
                                     for i=1:length(LIMO.design.nb_conditions)
-                                        tmp_H0_Conditions_Pillai(t,i,1,B) = model.conditions.F.Pillai{B}(i,:);
-                                        tmp_H0_Conditions_Pillai(t,i,2,B) = model.conditions.p.Pillai{B}(i,:);
-                                        tmp_H0_Conditions_Roy(t,i,1,B) = model.conditions.F.Roy{B}(i,:);
-                                        tmp_H0_Conditions_Roy(t,i,2,B) = model.conditions.p.Roy{B}(i,:);
+                                        tmp_H0_Conditions(t,i,1,B) = model.conditions.F.Roy{B}(i,:);
+                                        tmp_H0_Conditions(t,i,2,B) = model.conditions.p.Roy{B}(i,:);
+                                        tmp_H0_Conditions(t,i,3,B) = model.conditions.F.Pillai{B}(i,:);
+                                        tmp_H0_Conditions(t,i,4,B) = model.conditions.p.Pillai{B}(i,:);
                                     end
                                 end
                             end
@@ -1316,21 +1319,18 @@ switch varargin{1}
                     cd H0
                     save boot_table boot_table
                     save H0_Betas H0_Betas -v7.3
-                    save H0_R2_Pillai H0_R2_Pillai -v7.3
-                    save H0_R2_Roy H0_R2_Roy -v7.3
-                    
+                    save H0_R2 H0_R2 -v7.3
+                    save H0_Classification_Linear H0_Linear_Classification
+                    save H0_Classification_Quadratic H0_Quadratic_Classification
                     
                     if prod(LIMO.design.nb_conditions) ~=0
                         for i=1:length(LIMO.design.nb_conditions)
-                            name = sprintf('H0_Condition_effect_Pillai_%g',i);
-                            H0_Condition_effect_Pillai = squeeze(tmp_H0_Conditions_Pillai(:,i,:,:));
-                            save(name,'H0_Condition_effect_Pillai','-v7.3');
-                            name = sprintf('H0_Condition_effect_Roy_%g',i);
-                            H0_Condition_effect_Roy = squeeze(tmp_H0_Conditions_Roy(:,i,:,:));
-                            save(name,'H0_Condition_effect_Roy','-v7.3');                            
-                            clear H0_Condition_effect_Pillai HO_Condition_effect_Roy
+                            name = sprintf('H0_Condition_effect_%g',i);
+                            H0_Condition_effect = squeeze(tmp_H0_Conditions(:,i,:,:));
+                            save(name,'H0_Condition_effect','-v7.3');     
+                            clear H0_Condition_effect
                         end
-                        clear tmp_H0_Conditions_Pillai tmp_H0_Conditions_Roy
+                        clear tmp_H0_Conditions
                     end
                     
                     if LIMO.design.fullfactorial == 1
