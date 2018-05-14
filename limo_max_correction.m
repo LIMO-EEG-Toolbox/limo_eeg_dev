@@ -28,32 +28,63 @@ if nargin == 3
     fig = 1;
 end
 
-[a,b,nboot]=size(bootM);
-if any(size(M)~=[a b])
-    error('dimension error: matrices of observed and bootstrap values are different')
-end
-
-% collect highest value for each boot
-parfor boot=1:nboot
-    data = squeeze(bootM(:,:,boot));
-    maxM(boot) = max(data(:)); %
-end
-
-% get threshold
-maxM(maxM==Inf) = [];
-sortmaxM        = sort(maxM); 
-nboot           = length(sortmaxM);
-U               = round((1-p).*nboot);
-max_th          = sortmaxM(U);
-mask            = squeeze(M) >= max_th;
-
-% get the equivalent bootstrapped p-value
-smalest_pval = 1/nboot;
-for row =1:a
-    for column=1:b
-        p_val(row,column) = 1- (sum(M(row,column) <= sortmaxM) / nboot);
-        if p_val(row,column) == 0; p_val(row,column) = smalest_pval; end
+if ndims(bootM) == 3
+    [a,b,nboot]=size(bootM);
+    if any(size(M)~=[a b])
+        error('dimension error: matrices of observed and bootstrap values are different')
     end
+    
+    % collect highest value for each boot
+    parfor boot=1:nboot
+        data = squeeze(bootM(:,:,boot));
+        maxM(boot) = max(data(:)); %
+    end
+
+    % get threshold
+    maxM(maxM==Inf) = [];
+    sortmaxM        = sort(maxM); 
+    nboot           = length(sortmaxM);
+    U               = round((1-p).*nboot);
+    max_th          = sortmaxM(U);
+    mask            = squeeze(M) >= max_th;
+
+    % get the equivalent bootstrapped p-value
+    smalest_pval = 1/nboot;
+    for row =1:a
+        for column=1:b
+            p_val(row,column) = 1- (sum(M(row,column) <= sortmaxM) / nboot);
+            if p_val(row,column) == 0; p_val(row,column) = smalest_pval; end
+        end
+    end
+
+elseif ndims(bootM) == 2
+    [a,nboot]=size(bootM);
+    if any(size(M)~=[a 1])
+        error('dimension error: matrices of observed and bootstrap values are different')
+    end
+    
+    % collect highest value for each boot
+    parfor boot=1:nboot
+        data = squeeze(bootM(:,boot));
+        maxM(boot) = max(data); %
+    end
+
+    % get threshold
+    maxM(maxM==Inf) = [];
+    sortmaxM        = sort(maxM); 
+    nboot           = length(sortmaxM);
+    U               = round((1-p).*nboot);
+    max_th          = sortmaxM(U); % equals prctile(maxM, 95) 
+    mask            = squeeze(M) >= max_th;
+
+    % get the equivalent bootstrapped p-value
+    smalest_pval = 1/nboot;
+    for row =1:a
+        p_val(row) = 1- (sum(M(row) <= sortmaxM) / nboot);
+        if p_val(row) == 0; p_val(row) = smalest_pval; end
+
+    end
+
 end
 
 %% figure

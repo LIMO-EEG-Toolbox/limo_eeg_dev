@@ -118,7 +118,7 @@ if strcmp(FileName,'R2.mat')
         % cluster correction for multiple testing
         % ---------------------------------------  
     elseif MCC == 2 || MCC == 3
-                
+
         % correction using the max
         % --------------------------
     elseif MCC == 4 % Stat max
@@ -139,19 +139,20 @@ if strcmp(FileName,'R2.mat')
 elseif strncmp(FileName,'Condition_effect',16)
     
     effect_nb = eval(FileName(18:end-4));
+    MCC_data = sprintf('H0_Condition_effect_%g', effect_nb); 
+    
     if strcmp(choice,'Roy')
         M = squeeze(Condition_effect(:,1)); % F values Roy
+        P = squeeze(Condition_effect(:,2)); % p values Roy
     else
         M = squeeze(Condition_effect(:,3)); % F values Pillai
-    end
-    MCC_data = 'H0_Condition_effect.mat';
-    
+        P = squeeze(Condition_effect(:,4)); % p values Pillai
+    end    
     % no correction for multiple testing
     % -----------------------------------
-    if MCC == 1
-        
+    if MCC == 1  
         if LIMO.design.bootstrap >= 1
-            try cd('H0');load('H0_Condition_effect_1'); cd ..
+            try cd('H0');load(MCC_data); cd ..
                 if strcmp(choice,'Roy')
                     H0_F_values = squeeze(H0_Condition_effect(:,1,:)); clear H0_Condition_effect;
                 else
@@ -192,11 +193,42 @@ elseif strncmp(FileName,'Condition_effect',16)
         % cluster correction for multiple testing
         % ---------------------------------------  
     elseif MCC == 2 || MCC == 3
-                
+       try cd('H0'); load(MCC_data); cd ..
+            if strcmp(choice,'Roy')
+                bootM = squeeze(H0_Condition_effect(:,1,:)); % get all F values 
+                bootP = squeeze(H0_Condition_effect(:,2,:)); % get all p-values     
+            elseif strcmp(choice,'Pillai')
+                bootM = squeeze(H0_Condition_effect(:,3,:)); % get all F values pillai
+                bootP = squeeze(H0_Condition_effect(:,4,:)); % get all p-values pillai
+            end
+            % do the cluster correction:
+            [mask, M] = limo_clustering(M', P', bootM, bootP, LIMO, MCC, p, 1); 
+            mytitle = sprintf('Condition effect : correction by temporal clustering \n ');
+
+        catch ME
+            errordlg('no bootstrap file was found')
+            return
+        end
         % correction using the max
         % --------------------------
     elseif MCC == 4 % Stat max
-        
+        try cd('H0'); load(MCC_data); cd ..
+            if strcmp(choice,'Roy')
+                bootM = squeeze(H0_Condition_effect(:,1,:)); % get all F values 
+                bootP = squeeze(H0_Condition_effect(:,2,:)); % get all p-values     
+            elseif strcmp(choice,'Pillai')
+                bootM = squeeze(H0_Condition_effect(:,3,:)); % get all F values pillai
+                bootP = squeeze(H0_Condition_effect(:,4,:)); % get all p-values pillai
+            end
+            % correction:
+            [mask, M] = limo_max_correction(M, bootM, p,1); 
+            mask = mask';
+            mytitle = sprintf('Condition effect : correction by max F \n ');
+
+        catch ME
+            errordlg('no bootstrap file was found')
+            return
+        end
          
         % correction using TFCE
         % --------------------------
