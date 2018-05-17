@@ -1,20 +1,20 @@
 function filepath = limo_random_select_multivariate(type,varargin)
 
-% This function is used to combine classification accuracies/Fvalues/..
+% This function is used to combine timevectors (classification accuracies/Fvalues/..) 
 % computed at the 1st level using limo_mglm. 
 % Whereas in limo_mglm observations are assumed independent
 % (i.e. N-way ANOVA/ANCOVA or Regression), limo_random_effect_multivariate distinguishes
 % independents and non-independent (repeated) measures.
 %
-% Note that no statistical test is done in limo_random_select, only the grouping
+% Note that no statistical test is done in limo_random_select_multivariate, only the grouping
 % and organization of the data (hence the name select) - once data are
-% selected and re-organized they are send to limo_random_robust which deals
+% selected and re-organized they are send to limo_random_robust_multivariate which deals
 % with the data structures and call the stat functions
 %
 % FORMAT
-% limo_random_select(type)
-% limo_random_select(type,'nboot',1000,'tfce',1)
-% limo_random_select(type,'nboot',nbootval,'tfce',tfceval);
+% limo_random_select_multivariate(type)
+% limo_random_select_multivariate(type,'nboot',1000,'tfce',1)
+% limo_random_select_multivariate(type,'nboot',nbootval,'tfce',tfceval);
 %
 % INPUT
 % type = 1 for a one sample t-test
@@ -69,6 +69,7 @@ limo.design.tfce = g.tfce;
 limo.Level = 2;
 limo.Type = g.type;
 limo.Analysis = 'time';
+
 % ----------------------------------
 %%  One sample t-test and regression
 % ----------------------------------
@@ -92,11 +93,12 @@ if type == 1 || type == 4
     end
     limo.data.data_dir = Paths;
     
-    % match frames
+    % get info
     % ------------
     [subj_chanlocs, timevec, k] = get_info(Paths);
     limo.timevector = timevec(1,:);
     limo.nb_conditions_fl = k(1);
+    
     % get data 
     % -----------------------------
     disp('gathering data ...'); 
@@ -105,17 +107,12 @@ if type == 1 || type == 4
         %tmp = eval(str2mat(Names{1}(1:end-4)));
         tmp = lc.Linear_Classification;
         tmp = squeeze(tmp(:,2,:)); % pick cv accuracies
-
-        % get indices to trim data
-        %begins_at = max(first_frame) - first_frame(i) + 1;
-        %ends_at = size(tmp,2) - (last_frame(i) - min(last_frame));
         
         data(:,i) = tmp;
     end
         clear tmp
 end
-    
-    
+        
 % one-sample t-test
 % -----------------
 if type == 1
@@ -128,8 +125,7 @@ if type == 1
 
     LIMO.design.method = 'Trimmed means'; save LIMO LIMO
     Yr = data; save Yr Yr, clear Yr % just to be consistent with name
-    filepath = limo_random_robust(type,data,1,g.nboot,g.tfce);
-
+    filepath = limo_random_robust_multivariate(type,data,1,g.nboot,g.tfce);
 
     % regression
     % -------------

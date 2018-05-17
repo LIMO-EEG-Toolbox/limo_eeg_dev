@@ -12,7 +12,7 @@ function model = limo_mglm(varargin)
 %
 % FORMAT:
 % model = limo_mglm(Y,LIMO)
-% model = limo_mglm(Y,X,nb_conditions,nb_interactions,nb_continuous,method,W)
+% model = limo_mglm(Y,X,nb_conditions,nb_interactions,nb_continuous,method, cov_method,W)
 %
 % INPUTS:
 %   Y             = 2D matrix of EEG data with format trials/subjects x electrodes
@@ -25,6 +25,7 @@ function model = limo_mglm(varargin)
 %   method        = 'OLS', 'WLS', 'IRLS' (bisquare)
 %   W             = optional - a matrix a trial weights ; ie method 'WLS'
 %                   using these weights rather than something else
+%   cov_mehtod    = either pseudo inverse of cov or inverse on regularized cov
 %
 % OUTPUTS:
 %     model.R2.V 
@@ -44,7 +45,7 @@ function model = limo_mglm(varargin)
 %
 %     model.Discriminant.Z = discriminant functions (for plotting observations) 
 %          --> [trials/subjects x nb discriminant functions]
-%     model.Discriminant.Z_stand = standardized discriminant functions (for plotting observations) 
+%     model.Discriminant.Z_cent = centered discriminant functions (for plotting observations) 
 %     model.Discriminant.importanceZ = relative importance of each discrim function
 %          --> considers its eigenvalue as a proportion of the total 
 %     model.Discriminant.cc_squared = squared canonical correlation
@@ -54,9 +55,12 @@ function model = limo_mglm(varargin)
 %          In other words, find spatial patterns that distinguish classes
 %          [nb of electrodes x nb of discriminant functions]
 %
-%     model.Classification.Acc = decoding accuracy
-%     model.Classification.cvAcc = 10-fold cross validated decoding accuracy
-%     model.Classification.CvSD = sd error of cross validated accuracy
+%     model.Classification.Linear.Acc = decoding accuracy
+%     model.Classification.Linear.cvAcc = 10-fold cross validated decoding accuracy
+%     model.Classification.Linear.CvSD = sd error of cross validated accuracy
+%     model.Classification.Quadratic.Acc = decoding accuracy
+%     model.Classification.Quadratic.cvAcc = 10-fold cross validated decoding accuracy
+%     model.Classification.Quadratic.CvSD = sd error of cross validated accuracy
 %
 % NOTES:
 %
@@ -111,18 +115,20 @@ if nargin == 2
     nb_interactions = varargin{2}.design.nb_interactions;
     nb_continuous   = varargin{2}.design.nb_continuous;
     method          = varargin{2}.design.method;
+    cov_method      = varargin{2}.design.cov_method;
     try
         W           = varargin{2}.design.weigths;
     end
-elseif nargin >= 6
+elseif nargin >= 7
     Y               = varargin{1};
     X               = varargin{2};
     nb_conditions   = varargin{3};
     nb_interactions = varargin{4};
     nb_continuous   = varargin{5};
     method          = varargin{6};
-    if nargin == 7
-        W           = varargin(7);
+    cov_method      = varargin{7};
+    if nargin == 8
+        W           = varargin(8);
     end
 else
     error('varargin error')
@@ -158,7 +164,7 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
     T     = (Y-repmat(mean(Y),size(Y,1),1))'*(Y-repmat(mean(Y),size(Y,1),1));  % SS Total
     R     = eye(size(Y,1)) - (X*pinv(X));                                      % Projection on E
     E     = (Y'*R*Y);                                                          % SS Error
-    
+   
     % compute Beta parameters and weights
     if strcmp(method,'OLS')
         W = ones(size(Y,1),1);
@@ -187,6 +193,7 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         H = T - E; % temporary solution
     end 
     
+
     % Generalized R2
     % variance covariance matrix
     S = cov([Y X(:,1:size(X,2)-1)]);
@@ -196,7 +203,11 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
     Sxx = S(size(Y,2)+1:size(S,1),size(Y,2)+1:size(S,2));
     Rsquare_multi = trace(Sxy*Syx) / sqrt(trace(Sxx.^2)*trace(Syy.^2)); % Robert and Escoufier, J.Royal Stat Soc, C - 1976
     
-    [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H); 
+    if strcmp(cov_method, 'regularized')
+        [RegularizedCovariance, ~] = cov1para(Y);
+        E = RegularizedCovariance .* (size(Y,1)-nb_conditions);
+    end     
+    [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H, cov_method); 
     p = size(Y,2); % = number of variables (dimension)
     q = rank(X)-1; % -1 because of intercept column
     s = min(p,q); % df
@@ -231,7 +242,7 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         R0 = eye(size(Y,1)) - (X0*pinv(X0));
         M  = R0 - R;
         H  = (Betas'*X'*M*X*Betas); 
-        [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
+        [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H,cov_method);
     end
 
     vh = nb_conditions - 1; % df = q above
@@ -313,35 +324,54 @@ if nb_factors == 1   %  1-way MANOVA/MANCOVA
         
         % now, get standardized eigenvectors
         Spooled = E./ve;
+        if strcmp(cov_method, 'regularized')
+            Spooled = RegularizedCovariance;
+        end        
         standardized_eigenvectors = bsxfun(@times, scaled_eigenvectors, sqrt(diag(Spooled)));                
     end      
     %%
-    % do the classification (assign an indvidual sampling unit
-    % [trials/subjects] to one of the classes/groups)
+    % do the classification 
     %--------------------------------------------------------
-    % k classification functions (different than the s discriminant
-    % functions)
-    [class,~] = find(X(:,1:nb_conditions)');
-
-%     meanFeaturesGroup =  grpstats(Y, class, {'mean'});
-%     %L = bsxfun(@minus, (meanFeaturesGroup * pinv(Spooled) * Y'),(diag(1/2 * meanFeaturesGroup * pinv(Spooled) * meanFeaturesGroup')));
-%     coeff = round(meanFeaturesGroup * pinv(Spooled),1);
-%     intercept = diag(meanFeaturesGroup * pinv(Spooled) * meanFeaturesGroup')/2;
-%     L = (coeff * Y') - repmat(intercept,1,n); % page 306
-
     % get training linear decoding accuracy:
-    LinearModel = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear'); %The software inverts the covariance matrix using the pseudo inverse.
-    training_Acc = sum(diag(confusionmat(LinearModel.Y, predict(LinearModel, Y))))/sum(sum(confusionmat(LinearModel.Y, predict(LinearModel, Y))));
+    [class,~] = find(X(:,1:nb_conditions)');
+    [predicted] = limo_LDA(Y, class, Y, cov_method);
+    confmat = confusionmat(class, predicted); clear predicted;
+    training_Acc = sum(diag(confmat/sum(sum(confmat))));
     
-    % get CV linear decoding accuracy:
-    LinearModel_CV = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear','CrossVal', 'on'); 
-    acc = NaN(1,LinearModel_CV.KFold);
-    for k=1:LinearModel_CV.KFold
-        acc(k) = sum(diag(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))));
+    % get 10-fold CV linear decoding accuracy:
+    folds = 10;
+    cvp = cvpartition(class,'k',folds); 
+    accuracyvector = NaN(1,folds);
+    for foldi=1:folds
+        trainIdx = cvp.training(foldi);
+        testIdx = cvp.test(foldi);
+        % make a training and test set based on indexes:
+        trainingset = Y(trainIdx,:);
+        testset = Y(testIdx,:);
+        % class labels:
+        traininglabel = class(trainIdx,1);
+        testlabel = class(testIdx,1);
+        % Classification:
+        predicted = limo_LDA(trainingset,traininglabel,testset, cov_method);
+        confmat = confusionmat(testlabel, predicted); clear predicted;
+        accuracyvector(foldi) = sum(diag(confmat/sum(sum(confmat))));
     end
-    cvAcc = mean(acc);
-    cvSD  = sqrt(sum((acc - mean(acc)).^2)/(LinearModel_CV.KFold-1));
-    
+    cvAcc  = mean(accuracyvector);
+    cvSD = std(accuracyvector);
+% 
+%     % get training linear decoding accuracy:
+%     LinearModel = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear'); %The software inverts the covariance matrix using the pseudo inverse.
+%     training_Acc = sum(diag(confusionmat(LinearModel.Y, predict(LinearModel, Y))))/sum(sum(confusionmat(LinearModel.Y, predict(LinearModel, Y))));
+%     
+%     % get CV linear decoding accuracy:
+%     LinearModel_CV = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear','CrossVal', 'on'); 
+%     acc = NaN(1,LinearModel_CV.KFold);
+%     for k=1:LinearModel_CV.KFold
+%         acc(k) = sum(diag(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(LinearModel_CV.Y, predict(LinearModel_CV.Trained{k,1}, Y))));
+%     end
+%     cvAcc = mean(acc);
+%     cvSD  = sqrt(sum((acc - mean(acc)).^2)/(LinearModel_CV.KFold-1));
+%     
     % get training quadratic decoding accuracy:
     QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'pseudoquadratic');
     q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));

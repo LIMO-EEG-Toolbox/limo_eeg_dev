@@ -312,75 +312,8 @@ else
 end
 end
 
-%% subfunctions which do the actual thresholding
-function [mask,cluster_p] = local_clustering(M,P,bootM,bootP,LIMO,MCC,p)
-% call field trip functions to do 2D or 1D clustering
-%
-% M = 3D matrix of observed F values (note for a single electrode the format is 1*time frames*trials)
-% P = 3D matrix of observed p values (note for a single electrode the format is 1*time frames*trials)
-% bootM = 3D matrix of F values for data bootstrapped under H0
-% bootP = 3D matrix of F values for data bootstrapped under H0
-% LIMO = LIMO structure - information requested is LIMO.data.chanlocs and LIMO.data.neighbouring_matrix
-% MCC = 2 (spatial-temporal clustering) or 3 (temporal clustering)
-% p = threshold to apply (note this applied to create clusters and to
-% threshold the cluster map)
 
-if MCC == 2 
-    nboot = size(bootM,3);
-    U = round((1-p)*nboot); % bootstrap threshold
-    if size(bootM,1)>1 % many electrodes
-        minnbchan = 2;
-        expected_chanlocs = LIMO.data.chanlocs;
-        channeighbstructmat = LIMO.data.neighbouring_matrix;
-        boot_maxclustersum=zeros(nboot,1); % compute bootstrap clusters
-        for boot=1:nboot
-            boot_maxclustersum(boot) = limo_getclustersum(bootM(:,:,boot),bootP(:,:,boot),channeighbstructmat,minnbchan,p);
-        end
-        sort_boot_maxclustersum = sort(boot_maxclustersum,2);
-        maxclustersum_th = sort_boot_maxclustersum(U); % the threshold under H0
-        [mask,cluster_p] = limo_cluster_test2(M,P,maxclustersum_th,channeighbstructmat,minnbchan,p);
-        
-    elseif size(bootM,1)==1 % one electrode
-        th = limo_ecluster_make(squeeze(bootM),squeeze(bootP),p);
-        sigcluster = limo_ecluster_test(squeeze(M),squeeze(P),th,p);
-        mask = sigcluster.elec; cluster_p = [];
-    end
-    
-elseif MCC == 3
-    nboot = size(bootM,3);
-    U = round((1-p)*nboot); % bootstrap threshold
-    th = limo_ecluster_make(squeeze(bootM),squeeze(bootP),p);
-    sigcluster = limo_ecluster_test(squeeze(M),squeeze(P),th,p);
-    mask = sigcluster.elec;
-    
-end
-end
 
-function [mask,p_val] = max_correction(M,bootM,p)
-% correction for multiple testing using the max stat value
-% note this works for bootstrapped data under H0 and for TFCE
-%
-% M = matrix of observed values (note for a single electrode the format is 1*time frames*trials)
-% bootM = matrix of F values for data bootstrapped under H0
-% p = threshold to apply 
-
-nboot = size(bootM,3);
-for boot=1:nboot
-    data = squeeze(bootM(:,:,boot));
-    maxM(boot) = max(data(:)); % collect highest value in space and time for each boot
-end
-
-U=round((1-p).*nboot);
-sortmaxM = sort(maxM); % sort bootstraps 
-maxF_th = sortmaxM(:,U); % get threshold for each parameter
-mask = squeeze(M) >= maxF_th;
-for row =1:size(M,1)
-    for column=1:size(M,2)
-        p_val(row,column) = 1-(sum(squeeze(M(row,column)) >=sortmaxM) / nboot);
-    end
-end 
- 
-end
 
 
     

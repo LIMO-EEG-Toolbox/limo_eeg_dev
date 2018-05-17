@@ -271,7 +271,12 @@ if LIMO.Level == 1
                     if strncmp(FileName,'R2',2)
 
                         cd(LIMO.dir); load R2_EV.mat; EV = R2_EV(1:size(R2_EV,1),:); % no point plotting 0, just pick 5 1st Eigen values
-                        test = sum(sum(R2_EV(1:size(R2_EV,1),:)>1,2)>1); % check if we have more than 1 EV>1
+                        load('R2_EV_var.mat');
+                        test =  sum(R2_EV_var(1,:) > 90) / size(R2_EV_var,2); % If more than 50% of the time-frames have a 
+                        %first eigenvalue with a proportion higher than 90%, the results of Roy's test are displayed,
+                        if test > .50; choice = 'Roy'; else choice = 'Pillai'; end
+                        
+                        
                         if test ==1; choice = 'Roy'; else choice = 'Pillai'; end
                         clear R2_EV;
 
@@ -298,8 +303,11 @@ if LIMO.Level == 1
                         if strcmp(FileName(end-6:end),'_EV.mat'); FileName = [FileName(1:end-7) '.mat']; end
                         name = sprintf('Condition_effect_%g_EV',eval(FileName(18:end-4))); load(name);
                         EV = Condition_effect_EV(1:size(Condition_effect_EV,1),:); % no point plotting 0, just pick 5 1st Eigen values
-                        test =  sum(sum(EV>1,2)>1); % check if we have more than 1 EV>1
-                        if test >=1; choice = 'Roy'; else choice = 'Pillai'; end
+                        name = sprintf('Condition_effect_%g_EV_var',eval(FileName(18:end-4))); load(name);
+                        EV_var = Condition_effect_EV_var(1:size(Condition_effect_EV_var,1),:); 
+                        test =  sum(EV_var(1,:) > 90) / size(EV_var,2); % If more than 50% of the time-frames have a 
+                        %first eigenvalue with a proportion higher than 90%, the results of Roy's test are displayed,
+                        if test > .50; choice = 'Roy'; else choice = 'Pillai'; end
                         clear Condition_effect_EV;
 
                         load(FileName);

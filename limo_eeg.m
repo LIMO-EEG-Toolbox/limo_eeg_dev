@@ -1114,7 +1114,7 @@ switch varargin{1}
                 save(name,'R2_EV','-v7.3')
                 
                 name = sprintf('R2_EV_var',t); R2_EV_var = NaN(s,size(Yr,2));
-                for t=1:size(Yr,2); R2_EV_var(:,t) = model.R2.varEV; end
+                for t=1:size(Yr,2); R2_EV_var(:,t) = R2{t}.varEV; end
                 save(name,'R2_EV_var','-v7.3')
                 
                 name = sprintf('R2'); tmp = NaN(size(Yr,2),5);
@@ -1130,7 +1130,7 @@ switch varargin{1}
                             save(name,'Condition_effect_EV','-v7.3')
                             
                             name = sprintf('Condition_effect_%g_EV_var',i);
-                            for t=1:size(Yr,2); Condition_effect_EV_var(:,t) = model.conditions.varEV; end
+                            for t=1:size(Yr,2); Condition_effect_EV_var(:,t) = tmp_Condition_effect{t}.varEV; end
                             save(name,'Condition_effect_EV_var','-v7.3')
                             
                             name = sprintf('Condition_effect_%g',i);                            
