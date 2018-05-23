@@ -1320,8 +1320,8 @@ switch varargin{1}
                     save boot_table boot_table
                     save H0_Betas H0_Betas -v7.3
                     save H0_R2 H0_R2 -v7.3
-                    save H0_Classification_Linear H0_Linear_Classification
-                    save H0_Classification_Quadratic H0_Quadratic_Classification
+                    save H0_Linear_Classification H0_Linear_Classification
+                    save H0_Quadratic_Classification H0_Quadratic_Classification
                     
                     if prod(LIMO.design.nb_conditions) ~=0
                         for i=1:length(LIMO.design.nb_conditions)

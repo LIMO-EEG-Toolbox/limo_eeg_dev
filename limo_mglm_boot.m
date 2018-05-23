@@ -34,7 +34,6 @@ function model = limo_mglm_boot(varargin)
 %% varagin
 nboot = 800; %
 
-W = [];
 if nargin == 2 || nargin == 3
     y               = varargin{1};
     X               = varargin{2}.design.X;
@@ -42,9 +41,7 @@ if nargin == 2 || nargin == 3
     nb_interactions = varargin{2}.design.nb_interactions;
     nb_continuous   = varargin{2}.design.nb_continuous;
     method          = varargin{2}.design.method;
-    try
-        W           = varargin{2}.design.weigths;
-    end
+    cov_method      = varargin{2}.design.cov_method;
     
     if nargin == 2
         boot_table = randi(size(y,1), size(y,1), nboot); % resample observations (trials/subjects)
@@ -53,17 +50,18 @@ if nargin == 2 || nargin == 3
         nboot = size(boot_table,2);
     end
     
-elseif nargin >= 6
+elseif nargin >= 7
     y               = varargin{1};
     X               = varargin{2};
     nb_conditions   = varargin{3};
     nb_interactions = varargin{4};
     nb_continuous   = varargin{5};
     method          = varargin{6};
-    if nargin == 7
-        boot_table  = varargin(7);
+    cov_method      = varargin{7};
+    if nargin == 8
+        boot_table  = varargin(8);
         nboot = size(boot_table); 
-    elseif nargin == 6
+    elseif nargin == 7
         boot_table = randi(size(y,1), size(y,1),nboot); % resample observations (trials/subjects)
     end
     
@@ -193,11 +191,7 @@ parfor B = 1:nboot
             W = ones(size(Y,1),1);
             Betas = pinv(X)*Y;
         elseif strcmp(method,'WLS')
-            if isempty(W)
-                [Betas,W] = limo_WLS(X,Y);
-            else
-                Betas = pinv(WX)*WY;
-            end
+            [Betas,W] = limo_WLS(X,Y);
         elseif strcmp(method,'IRLS')
             [Betas,W] = limo_IRLS(X,Y);
         end
@@ -224,8 +218,12 @@ parfor B = 1:nboot
         Syx = S(1:size(Y,2),size(Y,2)+1:size(S,2));
         Sxx = S(size(Y,2)+1:size(S,1),size(Y,2)+1:size(S,2));
         Rsquare_multi = trace(Sxy*Syx) / sqrt(trace(Sxx.^2)*trace(Syy.^2)); % Robert and Escoufier, J.Royal Stat Soc, C - 1976
-
-        [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H); 
+        
+        if strcmp(cov_method, 'regularized')
+            [RegularizedCovariance, ~] = cov1para(Y);
+            E = RegularizedCovariance .* (size(Y,1)-nb_conditions);
+        end  
+        [Eigen_vectors_R2, Eigen_values_R2] = limo_decomp(E,H,cov_method); 
         p = size(Y,2); % = number of variables (dimension)
         q = rank(X)-1; % -1 because of intercept column
         s = min(p,q); % df
@@ -260,7 +258,7 @@ parfor B = 1:nboot
             R0 = eye(size(Y,1)) - (X0*pinv(X0));
             M  = R0 - R;
             H  = (Betas'*X'*M*X*Betas); 
-            [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H);
+            [Eigen_vectors_cond, Eigen_values_cond] = limo_decomp(E,H, cov_method);
         end
 
         vh = nb_conditions - 1; % df = q above
@@ -342,25 +340,48 @@ parfor B = 1:nboot
 %             standardized_eigenvectors = bsxfun(@times, scaled_eigenvectors, sqrt(diag(Spooled)));                
         end      
         %%
-        % do the classification (assign an indvidual sampling unit
-        % [trials/subjects] to one of the classes/groups)
+        % do the classification 
         %--------------------------------------------------------
-        % k classification functions (different than the s discriminant
-        % functions)
-        [class,~] = find(X(:,1:nb_conditions)');
-
         % get training linear decoding accuracy:
-        LinearModel = fitcdiscr(Y,class, 'DiscrimType', 'pseudolinear'); 
-        training_Acc = sum(diag(confusionmat(LinearModel.Y, predict(LinearModel, Y))))/sum(sum(confusionmat(LinearModel.Y, predict(LinearModel, Y))));
-        try
-            % get training quadratic decoding accuracy:
-            QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'quadratic');
-            q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));
-        catch
-            % get training quadratic decoding accuracy:
-            QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'pseudoquadratic');
-            q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));   
+        [class,~] = find(X(:,1:nb_conditions)');
+        [predicted] = limo_LDA(Y, class, Y, cov_method);
+        confmat = confusionmat(class, predicted); 
+        training_Acc = sum(diag(confmat/sum(sum(confmat))));
+
+        % get 10-fold CV linear decoding accuracy:
+        folds = 10;
+        cvp = cvpartition(class,'k',folds); 
+        accuracyvector = NaN(1,folds);
+        for foldi=1:folds
+            trainIdx = cvp.training(foldi);
+            testIdx = cvp.test(foldi);
+            % make a training and test set based on indexes:
+            trainingset = Y(trainIdx,:);
+            testset = Y(testIdx,:);
+            % class labels:
+            traininglabel = class(trainIdx,1);
+            testlabel = class(testIdx,1);
+            % Classification:
+            predicted = limo_LDA(trainingset,traininglabel,testset, cov_method);
+            confmat = confusionmat(testlabel, predicted); 
+            accuracyvector(foldi) = sum(diag(confmat/sum(sum(confmat))));
         end
+        cvAcc  = mean(accuracyvector);
+        cvSD = std(accuracyvector);
+        
+        % get training quadratic decoding accuracy:
+        QuadraticModel = fitcdiscr(Y, class, 'DiscrimType', 'pseudoquadratic');
+        q_training_Acc = sum(diag(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))))/sum(sum(confusionmat(QuadraticModel.Y, predict(QuadraticModel, Y))));
+
+        % get CV quadratic decoding accuracy:
+        QuadraticModel_CV = fitcdiscr(Y, class, 'DiscrimType', 'pseudoquadratic', 'CrossVal', 'on');    
+        q_acc = NaN(1,QuadraticModel_CV.KFold);
+        for k=1:QuadraticModel_CV.KFold
+            q_acc(k) = sum(diag(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))))/sum(sum(confusionmat(QuadraticModel_CV.Y, predict(QuadraticModel_CV.Trained{k,1}, Y))));
+        end
+        q_cvAcc = mean(q_acc);
+        q_cvSD  = sqrt(sum((q_acc - mean(q_acc)).^2)/(QuadraticModel_CV.KFold-1));     
+
         %% 
         % ------------------------------------------------
     elseif nb_factors > 1  && isempty(nb_interactions) % N-ways MANOVA without interactions

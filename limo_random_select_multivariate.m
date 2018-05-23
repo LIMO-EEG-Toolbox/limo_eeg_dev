@@ -107,7 +107,6 @@ if type == 1 || type == 4
         %tmp = eval(str2mat(Names{1}(1:end-4)));
         tmp = lc.Linear_Classification;
         tmp = squeeze(tmp(:,2,:)); % pick cv accuracies
-        
         data(:,i) = tmp;
     end
         clear tmp

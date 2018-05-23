@@ -77,7 +77,7 @@ if ndims(data) == 3
 
 elseif ndims(data) == 2
 
-        % number of trials
+    % number of trials
     na=size(data,2);
 
     % number of items to winsorize and trim

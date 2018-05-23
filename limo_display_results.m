@@ -272,7 +272,7 @@ if LIMO.Level == 1
 
                         cd(LIMO.dir); load R2_EV.mat; EV = R2_EV(1:size(R2_EV,1),:); % no point plotting 0, just pick 5 1st Eigen values
                         load('R2_EV_var.mat');
-                        test =  sum(R2_EV_var(1,:) > 90) / size(R2_EV_var,2); % If more than 50% of the time-frames have a 
+                        test =  sum(R2_EV_var(1,:) > 95) / size(R2_EV_var,2); % If more than 50% of the time-frames have a 
                         %first eigenvalue with a proportion higher than 90%, the results of Roy's test are displayed,
                         if test > .50; choice = 'Roy'; else choice = 'Pillai'; end
                         
@@ -305,7 +305,7 @@ if LIMO.Level == 1
                         EV = Condition_effect_EV(1:size(Condition_effect_EV,1),:); % no point plotting 0, just pick 5 1st Eigen values
                         name = sprintf('Condition_effect_%g_EV_var',eval(FileName(18:end-4))); load(name);
                         EV_var = Condition_effect_EV_var(1:size(Condition_effect_EV_var,1),:); 
-                        test =  sum(EV_var(1,:) > 90) / size(EV_var,2); % If more than 50% of the time-frames have a 
+                        test =  sum(EV_var(1,:) > 95) / size(EV_var,2); % If more than 50% of the time-frames have a 
                         %first eigenvalue with a proportion higher than 90%, the results of Roy's test are displayed,
                         if test > .50; choice = 'Roy'; else choice = 'Pillai'; end
                         clear Condition_effect_EV;
@@ -420,19 +420,38 @@ if LIMO.Level == 1
                     [class,~] = find(LIMO.design.X(:,1:LIMO.design.nb_conditions)');
                     k = LIMO.design.nb_conditions;
                     
-                    figure;set(gcf,'Color','w');
-                    subplot(2,2,[1 2]); % 2D plot of two discriminant functions
-                    gscatter(squeeze(Discriminant_scores(1,t,:)), squeeze(Discriminant_scores(2,t,:)), class, groupcolors(1:k), groupsymbols(1:k));
-                    grid on; axis tight;
-                    xlabel(['Z1, var: ' num2str(round(Condition_effect_EV_var(1,t)),2) '%'],'Fontsize',14); 
-                    ylabel(['Z2, var: ' num2str(round(Condition_effect_EV_var(2,t)),2) '%'],'Fontsize',14);
-                    title(['Results of the discriminant analysis at ' num2str(time(t)) 'ms'], 'Fontsize', 18);
-                    z1 = subplot(2,2,3); % First discriminant coeff
-                    topoplot(Discriminant_coeff(:,t,1),LIMO.data.chanlocs, 'electrodes','off','style','map','whitebk', 'on');colorbar;
-                    title('Z1','Fontsize',14); colormap(z1, 'hot'); 
-                    z2 = subplot(2,2,4); % Second discriminant coeff
-                    topoplot(Discriminant_coeff(:,t,2),LIMO.data.chanlocs, 'electrodes','off','style','map','whitebk', 'on');colorbar;
-                    title('Z2','Fontsize',14); colormap(z2, 'hot');
+                    if k>2
+                        figure;set(gcf,'Color','w');
+                        subplot(2,2,[1 2]); % 2D plot of two discriminant functions
+                        gscatter(squeeze(Discriminant_scores(1,t,:)), squeeze(Discriminant_scores(2,t,:)), class, groupcolors(1:k), groupsymbols(1:k));
+                        grid on; axis tight;
+                        xlabel(['Z1, var: ' num2str(round(Condition_effect_EV_var(1,t)),2) '%'],'Fontsize',14); 
+                        ylabel(['Z2, var: ' num2str(round(Condition_effect_EV_var(2,t)),2) '%'],'Fontsize',14);
+                        title(['Results of the discriminant analysis at ' num2str(time(t)) 'ms'], 'Fontsize', 18);
+                        z1 = subplot(2,2,3); % First discriminant coeff
+                        topoplot(Discriminant_coeff(:,t,1),LIMO.data.chanlocs, 'electrodes','off','style','map','whitebk', 'on');colorbar;
+                        title('Z1','Fontsize',14); colormap(z1, 'hot'); 
+                        z2 = subplot(2,2,4); % Second discriminant coeff
+                        topoplot(Discriminant_coeff(:,t,2),LIMO.data.chanlocs, 'electrodes','off','style','map','whitebk', 'on');colorbar;
+                        title('Z2','Fontsize',14); colormap(z2, 'hot');
+                    elseif k==2
+                        figure;set(gcf,'Color','w');
+                        subplot(2,2,[1 2]); % 1D plot of two discriminant functions
+                        data = squeeze(Discriminant_scores(1,t,:));
+                        class1 = data(class == 1);
+                        class2 = data(class == 2);
+                        h1 = histogram(class1, 'BinWidth', 0.1);
+                        hold on
+                        h2 = histogram(class2,'BinWidth',0.1);
+                        hold off
+                        legend show  
+                        grid on; axis tight;
+                        xlabel(['Z1, var: ' num2str(round(Condition_effect_EV_var(1,t)),2) '%'],'Fontsize',14); 
+                        title(['Results of the discriminant analysis at ' num2str(time(t)) 'ms'], 'Fontsize', 18);
+                        z1 = subplot(2,2,[3,4]); % First discriminant coeff
+                        topoplot(Discriminant_coeff(:,t,1),LIMO.data.chanlocs, 'electrodes','off','style','map','whitebk', 'on');colorbar;
+                        title('Z1','Fontsize',14); colormap(z1, 'hot');      
+                    end
                     
 %                     figure;set(gcf,'Color','w');
 %                     for t=1:size(Discriminant_coeff,2)
@@ -444,17 +463,17 @@ if LIMO.Level == 1
                 
                 if strncmp(FileName,'Linear_Classification',21)     
                     load('Linear_Classification');
-                    %[M, mask, mytitle] = limo_mstat_values(Type,FileName,p,MCC,LIMO,choice);
+                    [M, mask, mytitle] = limo_mstat_values(Type,FileName,p,MCC,LIMO,choice);
                     timevect = linspace(LIMO.data.start,LIMO.data.end,size(Linear_Classification,1));
                     figure;set(gcf,'Color','w');
                     subplot(3,1,[1 2]); % lineplot                    
-                    plot(timevect,Linear_Classification(:,2),'LineWidth',3);title('CV linear decoding accuracies +/- 2SD', 'Fontsize', 18);
-                    ylabel('decoding accuracies', 'Fontsize', 14);grid on; axis tight; hold on 
+                    plot(timevect,Linear_Classification(:,2),'LineWidth',3);title(mytitle, 'Fontsize', 18);
+                    ylabel('decoding accuracies', 'Fontsize', 14);grid on; axis tight; hold on;
                     plot(timevect, Linear_Classification(:,2) + 2*Linear_Classification(:,3), 'k-','LineWidth',1); hold on; 
                     plot(timevect, Linear_Classification(:,2) - 2*Linear_Classification(:,3), 'k-','LineWidth',1)
                     line([0,0],[0,1], 'color', 'black')
                     subplot(3, 1, 3); % imagesc accuracies
-                    scale = Linear_Classification(:,2)'; scale(scale==0)=NaN;
+                    toplot = Linear_Classification(:,2); scale = toplot'.*mask;scale(scale==0)=NaN;
                     imagesc(timevect,1,scale);xlabel('Time in ms');
                     color_images_(scale,LIMO); 
                     ylabel(' '); set(gca,'YTickLabel',{''});  

@@ -44,7 +44,7 @@ if strcmp(lower(method), 'pseudo')
     intercept = diag(meanFeaturesGroup * pinv(Spooled) * meanFeaturesGroup')/2;
     % calculate classification functions on testset
     L = (coeff * testset') - repmat(intercept,1,size(testset,1)); % page 306
-    Logical = L == repmat(max(L),3,1);
+    Logical = L == repmat(max(L),k,1);
     [predicted, ~] = find(Logical == 1);
 
 elseif strcmp(lower(method), 'regularized')
@@ -56,7 +56,7 @@ elseif strcmp(lower(method), 'regularized')
     intercept = diag(meanFeaturesGroup * inv(RegularizedCovariance) * meanFeaturesGroup')/2;
     % calculate classification functions on testset
     L = (coeff * testset') - repmat(intercept,1,size(testset,1)); % page 306
-    Logical = L == repmat(max(L),3,1);
+    Logical = L == repmat(max(L),k,1);
     [predicted, ~] = find(Logical == 1);
 end
 end % end function

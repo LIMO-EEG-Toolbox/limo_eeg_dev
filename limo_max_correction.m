@@ -8,8 +8,8 @@ function [mask,p_val,max_th] = limo_max_correction(M,bootM,p,fig)
 % FORMAT [mask,p_val,max_th] = limo_max_correction(M,bootM,p,fig)
 %
 % INPUT
-% M     = 2D matrix of observed values 
-% bootM = 3D matrix of T^2 or F values for data bootstrapped under H0
+% M     = 2D/1D matrix of observed values 
+% bootM = 3D/2D matrix of T^2 or F values for data bootstrapped under H0
 % p     = threshold to apply e.g. 5/100
 % fig   = 1/0 to plot the maximum stat un der H0
 %
@@ -80,7 +80,7 @@ elseif ndims(bootM) == 2
     % get the equivalent bootstrapped p-value
     smalest_pval = 1/nboot;
     for row =1:a
-        p_val(row) = 1- (sum(M(row) <= sortmaxM) / nboot);
+        p_val(row) = (sum(M(row) <= sortmaxM) / nboot);
         if p_val(row) == 0; p_val(row) = smalest_pval; end
 
     end

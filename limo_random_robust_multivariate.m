@@ -149,9 +149,9 @@ switch type
         clear varargin
         
         one_sample = NaN(size(data,1), 5);
-        name = sprintf('one_sample_ttest_time');
+        name = sprintf('one_sample_ttest_parameter_%g',parameter);
         Y = data;
-        [one_sample(:,4),one_sample(:,1),trimci,one_sample(:,2),one_sample(:,5),tcrit,one_sample(:,3)]=limo_trimci(Y,20, 0.05, 1/LIMO.nb_conditions_fl);
+        [one_sample(:,4),one_sample(:,1),trimci,one_sample(:,2),one_sample(:,5),tcrit,one_sample(:,3)]=limo_trimci(Y,5, 0.05, 1/LIMO.nb_conditions_fl);
 
         save ([name],'one_sample', '-v7.3')
         if nargout ~= 0, filepath = [fullfile(pwd,[name]),'.mat']; end            
@@ -161,7 +161,7 @@ switch type
         if nboot > 0
 
             bootex = 1;
-            boot_name = sprintf('H0_one_sample_ttest_time');
+            boot_name = sprintf('H0_one_sample_ttest_parameter_%g',parameter);
             if exist(['H0', filesep, boot_name, '.mat'], 'file')
                 answer = questdlg('a boostrap file already exist - overwrite?','data check','Yes','No','Yes');
                 if strcmp(answer,'Yes');
@@ -174,33 +174,41 @@ switch type
             if bootex == 1;
                 mkdir H0
                 % create a boot one_sample file to store data under H0 and H1
-                H0_one_sample = NaN(size(data,1), 2,nboot); % stores T and p values for each boot under H0
+                H0_one_sample = NaN(size(data,1),2,nboot); % stores T and p values for each boot under H0
+                % subtract chance level prediction
+                data = data - 1/LIMO.nb_conditions_fl;
                 % create centered data to estimate H0
-                centered_data = data' - repmat(limo_trimmed_mean(data),size(data,2),1);
+                centered_data = data - squeeze(repmat(limo_trimmed_mean(data),[1 1 size(data,2)]));
                 % centered_data = data - repmat(nanmean(data,3),[1 1 size(data,3)]);
                 % get boot table
                 disp('making boot table ...')
-                boot_table = limo_create_boot_table(data,nboot);
+                boot_table = randi(size(data,2), size(data,2), nboot);
                 save(['H0', filesep, 'boot_table'], 'boot_table')
 
                 % get results under H0
-                if exist('parfor','file') ~=0
-                    parfor b=1:nboot
-                        [t{b},~,~,~,p{b},~,~]=limo_trimci(Y(:,boot_table(:,b)));
-                    end
-
+                Y = centered_data; 
+                t = NaN(size(Y,1), nboot);
+                p = NaN(size(Y,1), nboot);
+%                 if exist('parfor','file') ~=0
+%                     parfor b=1:nboot
+%                         [t(:,b),~,~,~,p(:,b),~,~]=limo_trimci(Y(:,boot_table(:,b)), 5);
+%                     end
+% 
+%                     for b=1:nboot
+%                         H0_one_sample(:,1,b) = t(:,b);
+%                         H0_one_sample(:,2,b) = p(:,b);
+%                     end
+%                 else
                     for b=1:nboot
-                        H0_one_sample(:,1,b) = t{b};
-                        H0_one_sample(:,2,b) = p{b};
-                    end
-                else
-                    for b=1:nboot
-                        [H0_one_sample(:,1,b),tmdata,trimci,se,H0_one_sample(electrode,:,2,b),tcrit,df]=limo_trimci(Y(1,:,boot_table{electrode}(:,b)));
+                        [H0_one_sample(:,1,b),tmdata,trimci,se,H0_one_sample(:,2,b),tcrit,df]=limo_trimci(Y(:,boot_table(:,b)), 5);
+                        fprintf('boot %d\n',b)
                         % [m,dfe,ci,sd,n,H0_one_sample(electrode,:,1,b),H0_one_sample(electrode,:,2,b)] = limo_ttest(1,Y(1,:,boot_table{electrode}(:,b)),0,5/100);
                     end
-                end
+%                 end
                 clear tmp Y
-                save (['H0', filesep, boot_name],'H0_one_sample','-v7.3');
+           
+
+            save (['H0', filesep, boot_name],'H0_one_sample','-v7.3');
             end
 
             if tfce ~= 0
@@ -232,7 +240,7 @@ switch type
         %----------------------------------------------------------------------------------------------
     case {6}
         
- 
+
 end
 
 
