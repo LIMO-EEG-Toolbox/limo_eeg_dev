@@ -316,9 +316,9 @@ if LIMO.Level == 1
                         [M, mask, mytitle] = limo_mstat_values(Type,FileName,p,MCC,LIMO,choice);
                         if isempty(mask)
                             return
-                        elseif sum(mask(:)) == 0
-                            warndlg('  no values under threshold  ','no significant effect','modal');
-                            toplot = []; return
+%                         elseif sum(mask(:)) == 0
+%                             warndlg('  no values under threshold  ','no significant effect','modal');
+%                             toplot = []; return
                         else
                             if strcmp(choice,'Roy')
                                 toplot = F_values(:,1);
@@ -478,6 +478,10 @@ if LIMO.Level == 1
                     imagesc(timevect,1,scale);xlabel('Time in ms');
                     color_images_(scale,LIMO); 
                     ylabel(' '); set(gca,'YTickLabel',{''});  
+                    assignin('base','class_values',Linear_Classification(:,2))
+                    assignin('base','class_sd_values',Linear_Classification(:,3))
+                    assignin('base','p_values',M)
+                    assignin('base','mask',mask)       
                 end
                 
                 if strncmp(FileName,'Quadratic_Classification',24)

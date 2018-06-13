@@ -161,10 +161,12 @@ elseif strncmp(FileName,'Condition_effect',16)
                 sorted_values = sort(H0_F_values,2); clear H0_F_values
                 U = round((1-p)*size(sorted_values,2));
                 mask = (M >= sorted_values(:,U));
-                for column = 1:size(M,2)
+                tmp = size(mask,1);
+                for column = 1:size(M,1)
                     tmp(column) = sum(M(column)>squeeze(sorted_values(column,:)));
                 end
                 M = 1- (tmp ./ size(sorted_values,2)) ; % p values
+                M(M==0) = 1/size(sorted_values,2);
                 mytitle = sprintf('Condition effect : uncorrected threshold \n based on bootstrapped F values');
             catch ME
                 if strcmp(choice,'Roy')
@@ -275,14 +277,18 @@ elseif strncmp(FileName,'Linear_Classification',16)
     elseif MCC == 2 || MCC == 3
        try cd('H0'); load(MCC_data); cd ..
             bootM = H0_Linear_Classification; 
-            bootP = NaN(size(H0_Linear_Classification));            
+            time = linspace(LIMO.data.start, LIMO.data.end, size(Linear_Classification,1));
+            % get baseline indexes
+            index0 = dsearchn(time', 0);
+            baseline = 1:index0;
+            chance_level = max(Linear_Classification(baseline,2));
             % do the cluster correction:
             % 1.make the clusters under H0
             b = size(bootM,2);
             U = round((1-p)*b);
             boot_values = zeros(b,1);
             for kk=1:b % bootstrap samples
-                [L,NUM] = bwlabeln(squeeze(bootM(:,kk))>=1/LIMO.design.nb_conditions); % find clusters
+                [L,NUM] = bwlabeln(squeeze(bootM(:,kk))>=chance_level); % find clusters
                 if NUM~=0
                     tmp=zeros(1,NUM);
                     for C = 1:NUM % compute sum for each cluster
@@ -299,7 +305,7 @@ elseif strncmp(FileName,'Linear_Classification',16)
             % 2.make clusters under H1 and threshold
             sigcluster = zeros(size(M,1),1);
             pval = NaN(size(M,1),1);
-            [L,NUM] = bwlabeln(Linear_Classification(:,2) >= 1/LIMO.design.nb_conditions); % find clusters
+            [L,NUM] = bwlabeln(Linear_Classification(:,2) >= chance_level); % find clusters
             maxval = zeros(1,NUM);
             for C = 1:NUM % compute cluster sums & compare to bootstrap threshold
                 maxval(C) = sum(M(L==C)); % sum of classification accuracies
@@ -360,7 +366,7 @@ elseif strncmp(FileName,'Covariate_effect',16)
     % -----------------------------------
     if MCC == 1
         
-        if LIMO.design.bootstrap == 1
+        if LIMO.design.bootstrap >= 1
             try cd('H0');load(MCC_data); cd ..
                 if strcmp(choice,'Roy')
                     H0_F_values = squeeze(H0_R2(:,2,:)); clear H0_R2;
@@ -428,10 +434,29 @@ elseif strncmp(FileName,'one_sample',10)
     % no correction for multiple testing
     % -----------------------------------
     if MCC == 1
-        mask = one_sample(:,5) <= p;
-        %M = squeeze(one_sample(:,5));
-        mytitle = sprintf('One sample t-test on classification accuracies \n uncorrected threshold');
-        
+        if LIMO.design.bootstrap >= 1
+                try cd('H0');load(MCC_data); cd ..
+                    H0_one_sample = squeeze(H0_one_sample(:,1,:));
+                    sorted_values = sort(H0_one_sample,2); 
+                    U = round((1-p)*size(sorted_values,2));
+                    mask = (M >= sorted_values(:,U));
+                    for column = 1:size(M,1)
+                        tmp(column) = sum(M(column)>squeeze(sorted_values(column,:)));
+                    end
+                    M = 1- (tmp ./ size(sorted_values,2)) ; % p values
+                    mytitle = sprintf('One sample t-test on classification accuracies:\n uncorrected threshold based on bootstrap');
+                catch ME
+                    mask = one_sample(:,5) <= p;
+                    M = squeeze(one_sample(:,5));
+                     mytitle = sprintf('One sample t-test on classification accuracies \n uncorrected parametric threshold');
+                end
+                
+        else
+            mask = one_sample(:,5) <= p;
+            M = squeeze(one_sample(:,5));
+            mytitle = sprintf('One sample t-test on classification accuracies \n uncorrected parametric threshold');
+        end
+      
         
         % 2D cluster and 1D correction for multiple testing
         % ------------------------------------------

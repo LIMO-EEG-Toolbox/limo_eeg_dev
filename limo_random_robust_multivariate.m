@@ -151,7 +151,21 @@ switch type
         one_sample = NaN(size(data,1), 5);
         name = sprintf('one_sample_ttest_parameter_%g',parameter);
         Y = data;
-        [one_sample(:,4),one_sample(:,1),trimci,one_sample(:,2),one_sample(:,5),tcrit,one_sample(:,3)]=limo_trimci(Y,5, 0.05, 1/LIMO.nb_conditions_fl);
+        
+        % calculate threshold
+        % number of subjects
+        na=size(Y,2);
+        % number of items to winsorize and trim
+        percent = 5;
+        ga=floor((percent/100)*na);
+        asort=sort(Y,2);
+        tmdata=mean(asort(:,(ga+1):(na-ga)),2);
+        index0 = dsearchn(LIMO.timevector', 0);
+        baseline = 1:index0;
+        chance_level = max(tmdata(baseline,1))
+        
+        % perform one-sample ttest
+        [one_sample(:,4),one_sample(:,1),trimci,one_sample(:,2),one_sample(:,5),tcrit,one_sample(:,3)]=limo_trimci(Y,percent, 0.05, chance_level);
 
         save ([name],'one_sample', '-v7.3')
         if nargout ~= 0, filepath = [fullfile(pwd,[name]),'.mat']; end            
@@ -176,9 +190,9 @@ switch type
                 % create a boot one_sample file to store data under H0 and H1
                 H0_one_sample = NaN(size(data,1),2,nboot); % stores T and p values for each boot under H0
                 % subtract chance level prediction
-                data = data - 1/LIMO.nb_conditions_fl;
+                data = data - chance_level;
                 % create centered data to estimate H0
-                centered_data = data - squeeze(repmat(limo_trimmed_mean(data),[1 1 size(data,2)]));
+                centered_data = data - squeeze(repmat(limo_trimmed_mean(data,percent),[1 1 size(data,2)]));
                 % centered_data = data - repmat(nanmean(data,3),[1 1 size(data,3)]);
                 % get boot table
                 disp('making boot table ...')
@@ -200,7 +214,7 @@ switch type
 %                     end
 %                 else
                     for b=1:nboot
-                        [H0_one_sample(:,1,b),tmdata,trimci,se,H0_one_sample(:,2,b),tcrit,df]=limo_trimci(Y(:,boot_table(:,b)), 5);
+                        [H0_one_sample(:,1,b),tmdata,trimci,se,H0_one_sample(:,2,b),tcrit,df]=limo_trimci(Y(:,boot_table(:,b)), percent);
                         fprintf('boot %d\n',b)
                         % [m,dfe,ci,sd,n,H0_one_sample(electrode,:,1,b),H0_one_sample(electrode,:,2,b)] = limo_ttest(1,Y(1,:,boot_table{electrode}(:,b)),0,5/100);
                     end
