@@ -156,7 +156,7 @@ switch type
         % number of subjects
         na=size(Y,2);
         % number of items to winsorize and trim
-        percent = 5;
+        percent = 10;
         ga=floor((percent/100)*na);
         asort=sort(Y,2);
         tmdata=mean(asort(:,(ga+1):(na-ga)),2);

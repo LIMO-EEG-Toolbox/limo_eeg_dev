@@ -466,7 +466,7 @@ elseif strncmp(FileName,'one_sample',10)
             bootP = squeeze(H0_one_sample(:,2,:)); % get all P values under H0
             [mask,M] = limo_clustering(M.^2,squeeze(one_sample(:,5)),bootT.^2,bootP,LIMO,MCC,p); % square T values
             mytitle = sprintf('One sample t-test results on classification accuracies \n correction by temporal cluster');
-
+            M = M';
         catch ME
             errordlg('no bootstrap file was found to compute the cluster distribution','missing data')
             return

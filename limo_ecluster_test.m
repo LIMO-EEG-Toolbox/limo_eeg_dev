@@ -74,7 +74,7 @@ end
 if isfield(th, 'elec') 
     nboot =  size(th.boot_values,1);
     sigcluster = zeros(Ne,Nf);
-    pval = NaN(Ne,Nf);
+    pval = ones(Ne,Nf);
     ME = [];
     try
         [L,NUM] = bwlabeln(orip<=alpha_value); % find clusters
